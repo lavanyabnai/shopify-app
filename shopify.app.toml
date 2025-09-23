@@ -6,7 +6,7 @@ embedded = true
 handle = "control-tower-app"
 
 [access_scopes]
-scopes = "write_products, read_orders"
+scopes = "write_products, read_products, read_orders, write_orders, read_customers, read_inventory, read_locations, read_analytics, read_reports, read_fulfillments, read_shipping, read_discounts, read_price_rules, read_marketing_events"
 
 [auth]
 redirect_urls = [
@@ -17,18 +17,6 @@ redirect_urls = [
 
 [webhooks]
 api_version = "2024-07"
-
-[[webhooks.subscriptions]]
-topics = ["orders/create"]
-uri = "pubsub://shop-webhooks:control-tower"
-
-[[webhooks.subscriptions]]
-topics = ["orders/create"]
-uri = "/webhooks/app/order-create"
-
-[[webhooks.subscriptions]]
-topics = ["orders/create"]
-uri = "/webhooks/aws"
 
 [build]
 automatically_update_urls_on_dev = true
