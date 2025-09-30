@@ -43,8 +43,8 @@ import {
 
 // GraphQL queries
 const ORDERS_ANALYTICS_QUERY = `
-  query GetOrdersAnalytics($first: Int!, $query: String) {
-    orders(first: $first, query: $query) {
+  query GetOrdersAnalytics($first: Int!, $query: String, $after: String) {
+    orders(first: $first, query: $query, after: $after) {
       edges {
         node {
           id
@@ -165,26 +165,131 @@ interface AnalyticsData {
   }>;
 }
 
+// Helper function to add delay between API calls
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function loader({ request }: { request: Request }) {
   const { admin, session } = await authenticate.admin(request);
 
-  // Fetch all necessary data
-  const ordersResponse = await admin.graphql(ORDERS_ANALYTICS_QUERY, {
-    variables: { first: 250, query: "created_at:>2024-01-01" }
-  });
+  // Fetch orders for 2025 using pagination (filtered by processed date)
+  // Limit to prevent timeouts - fetch max 20 pages (5000 orders)
+  let allOrders: any[] = [];
+  let hasNextPage = true;
+  let cursor = null;
+  const query2025 = "processed_at:>=2025-01-01 AND processed_at:<2026-01-01";
+  let pageCount = 0;
+  const MAX_PAGES = 20; // Limit to 5000 orders max to prevent timeouts
+
+  while (hasNextPage && pageCount < MAX_PAGES) {
+    let retryCount = 0;
+    const maxRetries = 3;
+    let success = false;
+    
+    while (!success && retryCount <= maxRetries) {
+      try {
+        const variables: any = { first: 250, query: query2025 };
+        if (cursor) {
+          variables.after = cursor;
+        }
+        
+        // Add delay before each request (more aggressive rate limiting)
+        if (pageCount > 0) {
+          await delay(1500); // 1.5 second delay between pagination requests
+        }
+        
+        const ordersResponse = await admin.graphql(ORDERS_ANALYTICS_QUERY, {
+          variables
+        });
+        
+        const ordersData: any = await ordersResponse.json();
+        
+        // Check for GraphQL errors
+        if (ordersData.errors && ordersData.errors.length > 0) {
+          console.error('GraphQL errors:', ordersData.errors);
+          const errorMessage = ordersData.errors[0].message;
+          if (errorMessage.includes('Throttled')) {
+            throw new Error('Throttled');
+          }
+          throw new Error(`GraphQL Error: ${errorMessage}`);
+        }
+        
+        // Validate response structure
+        if (!ordersData || !ordersData.data || !ordersData.data.orders) {
+          console.error('Invalid response structure:', ordersData);
+          throw new Error('Invalid GraphQL response structure');
+        }
+        
+        const edges = ordersData.data.orders.edges || [];
+        allOrders = allOrders.concat(edges);
+        
+        hasNextPage = ordersData.data.orders.pageInfo?.hasNextPage || false;
+        cursor = ordersData.data.orders.pageInfo?.endCursor || null;
+        pageCount++;
+        
+        success = true; // Mark as successful
+        
+        console.log(`Fetched page ${pageCount}, total orders: ${allOrders.length}`);
+        
+      } catch (error: any) {
+        const errorMessage = error.message || String(error);
+        
+        // Handle different types of errors with retry logic
+        if ((errorMessage.includes('Throttled') || errorMessage.includes('fetch failed')) && retryCount < maxRetries) {
+          retryCount++;
+          const waitTime = 4000 * retryCount; // 4s, 8s, 12s
+          console.log(`Error on page ${pageCount + 1}: ${errorMessage}. Waiting ${waitTime}ms before retry ${retryCount}/${maxRetries}...`);
+          await delay(waitTime);
+        } else if (retryCount < maxRetries) {
+          retryCount++;
+          const waitTime = 3000 * retryCount;
+          console.log(`Error on page ${pageCount + 1}: ${errorMessage}. Waiting ${waitTime}ms before retry ${retryCount}/${maxRetries}...`);
+          await delay(waitTime);
+        } else {
+          console.error('Failed to fetch orders after retries:', errorMessage);
+          // Don't throw - just break and use what we have
+          break;
+        }
+      }
+    }
+    
+    if (!success) {
+      console.log(`Stopping pagination after ${pageCount} pages due to errors. Using ${allOrders.length} orders.`);
+      break;
+    }
+  }
   
-  const productsResponse = await admin.graphql(PRODUCTS_QUERY, {
-    variables: { first: 100 }
-  });
+  if (pageCount >= MAX_PAGES) {
+    console.log(`Reached maximum page limit (${MAX_PAGES}). Total orders fetched: ${allOrders.length}`);
+  } else {
+    console.log(`Finished fetching orders. Total: ${allOrders.length}`);
+  }
   
-  const locationsResponse = await admin.graphql(LOCATIONS_QUERY);
+  // Add delay before fetching products
+  await delay(1500);
   
-  const ordersData = await ordersResponse.json();
-  const productsData = await productsResponse.json();
-  const locationsData = await locationsResponse.json();
+  let productsData: any = { data: { products: { edges: [] } } };
+  try {
+    const productsResponse = await admin.graphql(PRODUCTS_QUERY, {
+      variables: { first: 100 }
+    });
+    productsData = await productsResponse.json();
+  } catch (error) {
+    console.error('Failed to fetch products:', error);
+  }
   
-  // Process analytics data
-  const analytics = processAnalyticsData(ordersData.data.orders.edges);
+  // Add delay before fetching locations
+  await delay(1500);
+  
+  let locationsData: any = { data: { locations: { edges: [] } } };
+  try {
+    const locationsResponse = await admin.graphql(LOCATIONS_QUERY);
+    locationsData = await locationsResponse.json();
+  } catch (error) {
+    console.error('Failed to fetch locations:', error);
+  }
+  
+  // Process analytics data for all of 2025
+  const analytics = processAnalyticsData(allOrders);
   
   return json({
     analytics,
@@ -195,7 +300,17 @@ export async function loader({ request }: { request: Request }) {
 }
 
 function processAnalyticsData(orders: any[]): AnalyticsData {
+  // Initialize all months of 2025
   const monthlyStats = new Map();
+  const months2025 = [
+    'Jan 2025', 'Feb 2025', 'Mar 2025', 'Apr 2025', 
+    'May 2025', 'Jun 2025', 'Jul 2025', 'Aug 2025', 
+    'Sep 2025', 'Oct 2025', 'Nov 2025', 'Dec 2025'
+  ];
+  months2025.forEach(month => {
+    monthlyStats.set(month, { orders: 0, revenue: 0 });
+  });
+  
   const productStats = new Map();
   const customerOrders = new Map();
   const locationStats = new Map();
@@ -208,15 +323,17 @@ function processAnalyticsData(orders: any[]): AnalyticsData {
     const amount = parseFloat(order.totalPriceSet.shopMoney.amount);
     totalRevenue += amount;
     
-    // Monthly aggregation
-    const month = new Date(order.createdAt).toLocaleDateString('en', { 
-      year: 'numeric', 
-      month: 'short' 
-    });
-    const monthData = monthlyStats.get(month) || { orders: 0, revenue: 0 };
-    monthData.orders += 1;
-    monthData.revenue += amount;
-    monthlyStats.set(month, monthData);
+    // Monthly aggregation based on processedAt date
+    if (order.processedAt) {
+      const month = new Date(order.processedAt).toLocaleDateString('en', { 
+        year: 'numeric', 
+        month: 'short' 
+      });
+      const monthData = monthlyStats.get(month) || { orders: 0, revenue: 0 };
+      monthData.orders += 1;
+      monthData.revenue += amount;
+      monthlyStats.set(month, monthData);
+    }
     
     // Order status
     if (order.displayFulfillmentStatus === 'FULFILLED') fulfilledCount++;
@@ -266,11 +383,11 @@ function processAnalyticsData(orders: any[]): AnalyticsData {
     else returningCustomers++;
   });
   
-  // Convert maps to arrays
+  // Convert maps to arrays (maintaining order for all 12 months of 2025)
   const monthlyData = Array.from(monthlyStats, ([month, data]) => ({
     month,
     ...data,
-  })).sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+  }));
   
   const productData = Array.from(productStats.values())
     .sort((a, b) => b.quantity - a.quantity)
@@ -355,6 +472,66 @@ export default function AnalyticsDashboard() {
     navigate(".", { replace: true });
     setTimeout(() => setRefreshing(false), 1000);
   }, [navigate]);
+  
+  // Filter monthly data based on selected period
+  const getFilteredMonthlyData = useCallback(() => {
+    if (selectedPeriod === "year") {
+      // Show all months for year view
+      return analytics.monthlyData;
+    }
+    
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0-11 (Sep = 8)
+    const currentYear = now.getFullYear();
+    
+    let monthsToShow: number;
+    
+    switch (selectedPeriod) {
+      case "30days":
+        monthsToShow = 1;
+        break;
+      case "3months":
+        monthsToShow = 3;
+        break;
+      case "6months":
+        monthsToShow = 6;
+        break;
+      default:
+        monthsToShow = 12;
+    }
+    
+    // Get the month names we want to show
+    const monthsToInclude: string[] = [];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Calculate which months to show (going backwards from current month)
+    for (let i = 0; i < monthsToShow; i++) {
+      let targetMonth = currentMonth - i;
+      let targetYear = currentYear;
+      
+      // Handle year boundary
+      if (targetMonth < 0) {
+        targetMonth += 12;
+        targetYear -= 1;
+      }
+      
+      monthsToInclude.push(`${monthNames[targetMonth]} ${targetYear}`);
+    }
+    
+    // Filter and reverse to show chronologically
+    const filtered = analytics.monthlyData.filter((data) => 
+      monthsToInclude.includes(data.month)
+    );
+    
+    // Sort by date to ensure proper order
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.month);
+      const dateB = new Date(b.month);
+      return dateA.getTime() - dateB.getTime();
+    });
+  }, [selectedPeriod, analytics.monthlyData]);
+  
+  const filteredMonthlyData = getFilteredMonthlyData();
   
   const COLORS = ['#5C6AC4', '#006FBB', '#47C1BF', '#50B83C', '#F49342', '#E3524F'];
   
@@ -457,7 +634,7 @@ export default function AnalyticsDashboard() {
                   />
                 </InlineStack>
                 <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analytics.monthlyData}>
+                  <AreaChart data={filteredMonthlyData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
