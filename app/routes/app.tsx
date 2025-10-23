@@ -36,6 +36,8 @@ export default function App() {
         <Link to="/app/orders">Orders</Link>
         <Link to="/app/qrcodes">QR Codes</Link>
         <Link to="/app/control-tower">Control Tower</Link>
+        <Link to="/app/sync">Data Sync</Link>
+        <Link to="/app/compute-analytics">Compute Analytics</Link>
         <Link to="/app/additional">Additional page</Link>
       </NavMenu>
       <Outlet />
