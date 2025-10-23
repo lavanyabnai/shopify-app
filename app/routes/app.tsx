@@ -25,10 +25,19 @@ export default function App() {
         <Link to="/app" rel="home">
           Home
         </Link>
+        <Link to="/app/service">Service Dashboard</Link>
+        <Link to="/app/sku">SKU Dashboard</Link>
+        <Link to="/app/skuviews">SKU Views</Link>
+        <Link to="/app/action-shape">Action: Shape Demand</Link>
+        <Link to="/app/action-redeploy">Action: Redeploy Stock</Link>
+        <Link to="/app/action-supply">Action: Increase Supply</Link>
+        <Link to="/app/issue-excess">Issues: Excess Inventory</Link>
         <Link to="/app/analytics">Analytics Dashboard</Link>
         <Link to="/app/orders">Orders</Link>
         <Link to="/app/qrcodes">QR Codes</Link>
         <Link to="/app/control-tower">Control Tower</Link>
+        <Link to="/app/sync">Data Sync</Link>
+        <Link to="/app/compute-analytics">Compute Analytics</Link>
         <Link to="/app/additional">Additional page</Link>
       </NavMenu>
       <Outlet />

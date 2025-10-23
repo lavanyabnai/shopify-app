@@ -1,51 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
-datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
-}
-
-model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
-}
-
-
-
-model QRCode {
-  id               Int      @id @default(autoincrement())
-  title            String
-  shop             String
-  productId        String
-  productHandle    String
-  productVariantId String
-  destination      String
-  scans            Int      @default(0)
-  createdAt        DateTime @default(now())
-}
-
-// Analytics Models for Dashboard Optimization
+// Add these models to your existing prisma/schema.prisma file
+// Copy the models below and paste them after your existing QRCode model
 
 model Order {
   id                String       @id // Shopify GID (e.g., "gid://shopify/Order/123")
@@ -158,3 +112,9 @@ model SyncStatus {
 
   updatedAt       DateTime @updatedAt
 }
+
+// Migration commands:
+// 1. Copy these models to your prisma/schema.prisma
+// 2. Run: npx prisma migrate dev --name add_analytics_models
+// 3. Run: npx prisma generate
+// 4. Check with: npx prisma studio

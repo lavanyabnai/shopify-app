@@ -1,6 +1,8 @@
-import { json } from "@remix-run/node";
+import { redirect, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import { authenticate } from "../shopify.server";
+import db from "../db.server";
+import cache, { CACHE_KEYS } from "../services/cache.server";
 import {
   Page,
   Layout,
@@ -11,11 +13,11 @@ import {
   Box,
   Badge,
   DataTable,
-  Select,
-  DatePicker,
-  Button,
   Icon,
   InlineStack,
+  Banner,
+  ButtonGroup,
+  Button,
 } from "@shopify/polaris";
 import {
   ArrowUpIcon,
@@ -23,8 +25,9 @@ import {
   PackageIcon,
   CashDollarIcon,
   RefreshIcon,
+  ClockIcon,
 } from "@shopify/polaris-icons";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -41,101 +44,7 @@ import {
   Area,
 } from "recharts";
 
-// GraphQL queries
-const ORDERS_ANALYTICS_QUERY = `
-  query GetOrdersAnalytics($first: Int!, $query: String, $after: String) {
-    orders(first: $first, query: $query, after: $after) {
-      edges {
-        node {
-          id
-          name
-          createdAt
-          processedAt
-          totalPriceSet {
-            shopMoney {
-              amount
-              currencyCode
-            }
-          }
-          displayFulfillmentStatus
-          displayFinancialStatus
-          customer {
-            id
-          }
-          lineItems(first: 50) {
-            edges {
-              node {
-                id
-                title
-                quantity
-                product {
-                  id
-                  title
-                  productType
-                  vendor
-                }
-                variant {
-                  id
-                  title
-                  price
-                }
-              }
-            }
-          }
-          shippingAddress {
-            city
-            province
-            country
-          }
-        }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-    }
-  }
-`;
-
-const PRODUCTS_QUERY = `
-  query GetProducts($first: Int!) {
-    products(first: $first) {
-      edges {
-        node {
-          id
-          title
-          productType
-          vendor
-          totalInventory
-          priceRangeV2 {
-            minVariantPrice {
-              amount
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-const LOCATIONS_QUERY = `
-  query GetLocations {
-    locations(first: 10) {
-      edges {
-        node {
-          id
-          name
-          address {
-            city
-            province
-            country
-          }
-        }
-      }
-    }
-  }
-`;
-
+// TypeScript interfaces for our data structures
 interface AnalyticsData {
   totalOrders: number;
   totalRevenue: number;
@@ -165,259 +74,480 @@ interface AnalyticsData {
   }>;
 }
 
-// Helper function to add delay between API calls
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+interface LoaderData {
+  analytics: AnalyticsData;
+  shop: string;
+  syncStatus: {
+    lastOrderSync: string | null;
+    lastProductSync: string | null;
+    syncInProgress: boolean;
+    totalOrders: number;
+    totalProducts: number;
+    hasData: boolean;
+  };
+  dataSource: "snapshot" | "computed" | "empty" | "cache";
+  cacheHit: boolean;
+  timeRange: string;
+}
 
-export async function loader({ request }: { request: Request }) {
-  const { admin, session } = await authenticate.admin(request);
+/**
+ * OPTIMIZED LOADER WITH REDIS CACHING
+ * Target: <500ms on cache hit, <2s on cache miss
+ */
+export async function loader({ request }: LoaderFunctionArgs) {
+  const startTime = Date.now();
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
 
-  // Fetch orders for 2025 using pagination (filtered by processed date)
-  // Limit to prevent timeouts - fetch max 20 pages (5000 orders)
-  let allOrders: any[] = [];
-  let hasNextPage = true;
-  let cursor = null;
-  const query2025 = "processed_at:>=2025-01-01 AND processed_at:<2026-01-01";
-  let pageCount = 0;
-  const MAX_PAGES = 20; // Limit to 5000 orders max to prevent timeouts
+  // Get time range filter from URL (default: "12months")
+  const url = new URL(request.url);
+  const timeRange = url.searchParams.get("range") || "12months";
 
-  while (hasNextPage && pageCount < MAX_PAGES) {
-    let retryCount = 0;
-    const maxRetries = 3;
-    let success = false;
-    
-    while (!success && retryCount <= maxRetries) {
-      try {
-        const variables: any = { first: 250, query: query2025 };
-        if (cursor) {
-          variables.after = cursor;
-        }
-        
-        // Add delay before each request (more aggressive rate limiting)
-        if (pageCount > 0) {
-          await delay(1500); // 1.5 second delay between pagination requests
-        }
-        
-        const ordersResponse = await admin.graphql(ORDERS_ANALYTICS_QUERY, {
-          variables
-        });
-        
-        const ordersData: any = await ordersResponse.json();
-        
-        // Check for GraphQL errors
-        if (ordersData.errors && ordersData.errors.length > 0) {
-          console.error('GraphQL errors:', ordersData.errors);
-          const errorMessage = ordersData.errors[0].message;
-          if (errorMessage.includes('Throttled')) {
-            throw new Error('Throttled');
-          }
-          throw new Error(`GraphQL Error: ${errorMessage}`);
-        }
-        
-        // Validate response structure
-        if (!ordersData || !ordersData.data || !ordersData.data.orders) {
-          console.error('Invalid response structure:', ordersData);
-          throw new Error('Invalid GraphQL response structure');
-        }
-        
-        const edges = ordersData.data.orders.edges || [];
-        allOrders = allOrders.concat(edges);
-        
-        hasNextPage = ordersData.data.orders.pageInfo?.hasNextPage || false;
-        cursor = ordersData.data.orders.pageInfo?.endCursor || null;
-        pageCount++;
-        
-        success = true; // Mark as successful
-        
-        console.log(`Fetched page ${pageCount}, total orders: ${allOrders.length}`);
-        
-      } catch (error: any) {
-        const errorMessage = error.message || String(error);
-        
-        // Handle different types of errors with retry logic
-        if ((errorMessage.includes('Throttled') || errorMessage.includes('fetch failed')) && retryCount < maxRetries) {
-          retryCount++;
-          const waitTime = 4000 * retryCount; // 4s, 8s, 12s
-          console.log(`Error on page ${pageCount + 1}: ${errorMessage}. Waiting ${waitTime}ms before retry ${retryCount}/${maxRetries}...`);
-          await delay(waitTime);
-        } else if (retryCount < maxRetries) {
-          retryCount++;
-          const waitTime = 3000 * retryCount;
-          console.log(`Error on page ${pageCount + 1}: ${errorMessage}. Waiting ${waitTime}ms before retry ${retryCount}/${maxRetries}...`);
-          await delay(waitTime);
-        } else {
-          console.error('Failed to fetch orders after retries:', errorMessage);
-          // Don't throw - just break and use what we have
-          break;
-        }
+  // Try to get from Redis cache first (include time range in cache key)
+  const cacheKey = `${CACHE_KEYS.ANALYTICS_SNAPSHOT(shop)}:${timeRange}`;
+  const cachedData = await cache.get<LoaderData>(cacheKey);
+
+  if (cachedData) {
+    const loadTime = Date.now() - startTime;
+    console.log(`🚀 Analytics dashboard loaded from cache in ${loadTime}ms`);
+    return Response.json(
+      { ...cachedData, cacheHit: true },
+      {
+        headers: {
+          "X-Cache": "HIT",
+          "X-Load-Time": `${loadTime}ms`,
+        },
       }
-    }
-    
-    if (!success) {
-      console.log(`Stopping pagination after ${pageCount} pages due to errors. Using ${allOrders.length} orders.`);
+    );
+  }
+
+  // Cache miss - fetch from database
+  console.log(`📭 Cache miss for ${shop}, querying database...`);
+
+  // Fetch sync status to show data freshness
+  let syncStatus = await db.syncStatus.findUnique({
+    where: { shop },
+  });
+
+  // Get daily snapshots based on time range filter
+  const whereClause: any = {
+    shop,
+    period: "daily",
+  };
+
+  // Apply date filter based on time range
+  const now = new Date();
+  switch (timeRange) {
+    case "1month":
+      const oneMonthAgo = new Date(now);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      whereClause.date = { gte: oneMonthAgo };
       break;
+    case "3months":
+      const threeMonthsAgo = new Date(now);
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      whereClause.date = { gte: threeMonthsAgo };
+      break;
+    case "6months":
+      const sixMonthsAgo = new Date(now);
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      whereClause.date = { gte: sixMonthsAgo };
+      break;
+    case "12months":
+      const twelveMonthsAgo = new Date(now);
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+      whereClause.date = { gte: twelveMonthsAgo };
+      break;
+    case "year":
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      whereClause.date = { gte: yearStart };
+      break;
+    case "alltime":
+      // No date filter for all-time
+      break;
+  }
+
+  const monthlySnapshots = await db.analyticsSnapshot.findMany({
+    where: whereClause,
+    orderBy: { date: "asc" },
+  });
+
+  let analytics: AnalyticsData;
+  let dataSource: "snapshot" | "computed" | "empty" = "empty";
+
+  // Strategy 1: Use snapshots if available - aggregate ALL snapshots for cumulative totals
+  if (monthlySnapshots.length > 0) {
+    analytics = aggregateAllSnapshots(monthlySnapshots, timeRange);
+    dataSource = "snapshot";
+  } else {
+    // Strategy 2: Compute on-the-fly from database (fallback if no snapshots)
+    const computedAnalytics = await computeAnalyticsFromDatabase(shop);
+
+    if (computedAnalytics.totalOrders > 0) {
+      analytics = computedAnalytics;
+      dataSource = "computed";
+    } else {
+      // Strategy 3: Return empty state
+      analytics = getEmptyAnalytics();
+      dataSource = "empty";
     }
   }
-  
-  if (pageCount >= MAX_PAGES) {
-    console.log(`Reached maximum page limit (${MAX_PAGES}). Total orders fetched: ${allOrders.length}`);
-  } else {
-    console.log(`Finished fetching orders. Total: ${allOrders.length}`);
-  }
-  
-  // Add delay before fetching products
-  await delay(1500);
-  
-  let productsData: any = { data: { products: { edges: [] } } };
-  try {
-    const productsResponse = await admin.graphql(PRODUCTS_QUERY, {
-      variables: { first: 100 }
-    });
-    productsData = await productsResponse.json();
-  } catch (error) {
-    console.error('Failed to fetch products:', error);
-  }
-  
-  // Add delay before fetching locations
-  await delay(1500);
-  
-  let locationsData: any = { data: { locations: { edges: [] } } };
-  try {
-    const locationsResponse = await admin.graphql(LOCATIONS_QUERY);
-    locationsData = await locationsResponse.json();
-  } catch (error) {
-    console.error('Failed to fetch locations:', error);
-  }
-  
-  // Process analytics data for all of 2025
-  const analytics = processAnalyticsData(allOrders);
-  
-  return json({
+
+  const data: LoaderData = {
     analytics,
-    products: productsData.data.products.edges,
-    locations: locationsData.data.locations.edges,
-    shop: session.shop,
+    shop,
+    syncStatus: {
+      lastOrderSync: syncStatus?.lastOrderSync?.toISOString() || null,
+      lastProductSync: syncStatus?.lastProductSync?.toISOString() || null,
+      syncInProgress: syncStatus?.syncInProgress || false,
+      totalOrders: syncStatus?.totalOrders || 0,
+      totalProducts: syncStatus?.totalProducts || 0,
+      hasData: (syncStatus?.totalOrders || 0) > 0,
+    },
+    dataSource,
+    cacheHit: false,
+    timeRange,
+  };
+
+  // Store in Redis cache (5 minute TTL)
+  // Fire and forget - don't wait for cache write
+  if (dataSource !== "empty") {
+    cache.set(cacheKey, data, 300).catch((err) => {
+      console.error("⚠️ Failed to cache analytics data:", err);
+    });
+  }
+
+  const loadTime = Date.now() - startTime;
+  console.log(`📊 Analytics dashboard loaded from DB in ${loadTime}ms using ${dataSource} data`);
+
+  return Response.json(data, {
+    headers: {
+      "X-Cache": "MISS",
+      "X-Load-Time": `${loadTime}ms`,
+      "Cache-Control": "public, max-age=60", // Browser cache for 1 minute
+    },
   });
 }
 
-function processAnalyticsData(orders: any[]): AnalyticsData {
-  // Initialize all months of 2025
-  const monthlyStats = new Map();
-  const months2025 = [
-    'Jan 2025', 'Feb 2025', 'Mar 2025', 'Apr 2025', 
-    'May 2025', 'Jun 2025', 'Jul 2025', 'Aug 2025', 
-    'Sep 2025', 'Oct 2025', 'Nov 2025', 'Dec 2025'
-  ];
-  months2025.forEach(month => {
-    monthlyStats.set(month, { orders: 0, revenue: 0 });
+/**
+ * ACTION - Handle manual refresh button
+ */
+export async function action({ request }: LoaderFunctionArgs) {
+  await authenticate.admin(request);
+
+  // Redirect to sync page, then back to analytics
+  return redirect("/app/sync?return=/app/analytics");
+}
+
+/**
+ * Aggregate ALL snapshots to get cumulative totals across entire history
+ */
+function aggregateAllSnapshots(snapshots: any[], timeRange: string): AnalyticsData {
+  let totalOrders = 0;
+  let totalRevenue = 0;
+  let fulfilledOrders = 0;
+  let paidOrders = 0;
+
+  const productMap = new Map<
+    string,
+    { name: string; quantity: number; revenue: number; orders: number }
+  >();
+  const locationMap = new Map<string, { orders: number; revenue: number }>();
+  const customerSegmentsMap = {
+    new: 0,
+    returning: 0,
+    vip: 0,
+  };
+
+  // Aggregate metrics from all snapshots
+  snapshots.forEach((snapshot) => {
+    totalOrders += snapshot.totalOrders;
+    totalRevenue += snapshot.totalRevenue;
+    fulfilledOrders += snapshot.fulfilledOrders;
+    paidOrders += snapshot.paidOrders;
+
+    // Aggregate products
+    const snapshotProducts = snapshot.topProducts
+      ? JSON.parse(snapshot.topProducts)
+      : [];
+    snapshotProducts.forEach((product: any) => {
+      const existing = productMap.get(product.name) || {
+        name: product.name,
+        quantity: 0,
+        revenue: 0,
+        orders: 0,
+      };
+      existing.quantity += product.quantity || 0;
+      existing.revenue += product.revenue || 0;
+      existing.orders += product.orders || 0;
+      productMap.set(product.name, existing);
+    });
+
+    // Aggregate locations
+    const snapshotLocations = snapshot.topLocations
+      ? JSON.parse(snapshot.topLocations)
+      : [];
+    snapshotLocations.forEach((location: any) => {
+      const existing = locationMap.get(location.location) || {
+        orders: 0,
+        revenue: 0,
+      };
+      existing.orders += location.orders || 0;
+      existing.revenue += location.revenue || 0;
+      locationMap.set(location.location, existing);
+    });
+
+    // Aggregate customer segments
+    const snapshotSegments = snapshot.customerSegments
+      ? JSON.parse(snapshot.customerSegments)
+      : { new: 0, returning: 0, vip: 0 };
+    customerSegmentsMap.new += snapshotSegments.new || 0;
+    customerSegmentsMap.returning += snapshotSegments.returning || 0;
+    customerSegmentsMap.vip += snapshotSegments.vip || 0;
   });
-  
-  const productStats = new Map();
-  const customerOrders = new Map();
-  const locationStats = new Map();
-  
+
+  // Generate monthly data from daily snapshots
+  const monthlyData = aggregateMonthlyData(snapshots, timeRange);
+
+  // Sort and limit products
+  const productData = Array.from(productMap.values())
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 10);
+
+  // Sort and limit locations
+  const locationData = Array.from(locationMap, ([location, stats]) => ({
+    location,
+    ...stats,
+  }))
+    .sort((a, b) => b.orders - a.orders)
+    .slice(0, 10);
+
+  return {
+    totalOrders,
+    totalRevenue,
+    averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+    fulfilledOrders,
+    paidOrders,
+    monthlyData,
+    productData,
+    customerSegments: customerSegmentsMap,
+    locationData,
+  };
+}
+
+/**
+ * Aggregate daily snapshots into monthly data for trend chart
+ */
+function aggregateMonthlyData(snapshots: any[], timeRange: string): Array<{
+  month: string;
+  orders: number;
+  revenue: number;
+}> {
+  const monthlyMap = new Map<string, { orders: number; revenue: number }>();
+
+  snapshots.forEach((snapshot) => {
+    const date = new Date(snapshot.date);
+    const monthKey = date.toLocaleDateString("en", {
+      year: "numeric",
+      month: "short",
+    });
+
+    const existing = monthlyMap.get(monthKey) || { orders: 0, revenue: 0 };
+    existing.orders += snapshot.totalOrders;
+    existing.revenue += snapshot.totalRevenue;
+    monthlyMap.set(monthKey, existing);
+  });
+
+  // Determine how many months to show based on time range
+  let monthsToShow = 12;
+  switch (timeRange) {
+    case "1month":
+      monthsToShow = 1;
+      break;
+    case "3months":
+      monthsToShow = 3;
+      break;
+    case "6months":
+      monthsToShow = 6;
+      break;
+    case "12months":
+      monthsToShow = 12;
+      break;
+    case "year":
+      monthsToShow = 12;
+      break;
+    case "alltime":
+      // For all-time, return all available months from the data
+      return Array.from(monthlyMap.entries())
+        .sort((a, b) => {
+          const dateA = new Date(a[0]);
+          const dateB = new Date(b[0]);
+          return dateA.getTime() - dateB.getTime();
+        })
+        .map(([month, data]) => ({
+          month,
+          orders: data.orders,
+          revenue: data.revenue,
+        }));
+  }
+
+  // Generate month labels for the specified range
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = monthsToShow - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - i);
+    months.push(
+      d.toLocaleDateString("en", { year: "numeric", month: "short" })
+    );
+  }
+
+  return months.map((month) => ({
+    month,
+    orders: monthlyMap.get(month)?.orders || 0,
+    revenue: monthlyMap.get(month)?.revenue || 0,
+  }));
+}
+
+/**
+ * Fallback: Compute analytics from database orders (if no snapshots available)
+ */
+async function computeAnalyticsFromDatabase(
+  shop: string
+): Promise<AnalyticsData> {
+  // Fetch last 100 orders for quick computation
+  const orders = await db.order.findMany({
+    where: { shop },
+    include: { lineItems: true },
+    orderBy: { processedAt: "desc" },
+    take: 100,
+  });
+
+  if (orders.length === 0) {
+    return getEmptyAnalytics();
+  }
+
+  // Aggregate metrics
   let totalRevenue = 0;
   let fulfilledCount = 0;
   let paidCount = 0;
-  
-  orders.forEach(({ node: order }) => {
-    const amount = parseFloat(order.totalPriceSet.shopMoney.amount);
-    totalRevenue += amount;
-    
-    // Monthly aggregation based on processedAt date
-    if (order.processedAt) {
-      const month = new Date(order.processedAt).toLocaleDateString('en', { 
-        year: 'numeric', 
-        month: 'short' 
-      });
-      const monthData = monthlyStats.get(month) || { orders: 0, revenue: 0 };
-      monthData.orders += 1;
-      monthData.revenue += amount;
-      monthlyStats.set(month, monthData);
-    }
-    
-    // Order status
-    if (order.displayFulfillmentStatus === 'FULFILLED') fulfilledCount++;
-    if (order.displayFinancialStatus === 'PAID') paidCount++;
-    
+  const productMap = new Map<
+    string,
+    { name: string; quantity: number; revenue: number; orders: number }
+  >();
+  const locationMap = new Map<string, { orders: number; revenue: number }>();
+  const customerMap = new Map<string, number>();
+  const monthlyMap = new Map<string, { orders: number; revenue: number }>();
+
+  orders.forEach((order: any) => {
+    totalRevenue += order.totalPrice;
+
+    if (order.fulfillmentStatus === "FULFILLED") fulfilledCount++;
+    if (order.financialStatus === "PAID") paidCount++;
+
     // Customer segmentation
-    if (order.customer) {
-      const customerId = order.customer.id;
-      const orderCount = customerOrders.get(customerId) || 0;
-      customerOrders.set(customerId, orderCount + 1);
+    if (order.customerId) {
+      customerMap.set(
+        order.customerId,
+        (customerMap.get(order.customerId) || 0) + 1
+      );
     }
 
-    // Product analysis
-    order.lineItems.edges.forEach((edge: { node: any }) => {
-      const item = edge.node;
-      const product = item.product;
-      if (product) {
-        const key = product.title;
-        const stats = productStats.get(key) || {
-          name: key,
-          quantity: 0,
-          revenue: 0,
-          orders: 0,
-        };
-        stats.quantity += item.quantity;
-        stats.revenue += item.quantity * parseFloat(item.variant.price);
-        stats.orders += 1;
-        productStats.set(key, stats);
-      }
-    });
-    
-    // Location analysis
-    if (order.shippingAddress) {
-      const location = order.shippingAddress.city || 'Unknown';
-      const locData = locationStats.get(location) || { orders: 0, revenue: 0 };
-      locData.orders += 1;
-      locData.revenue += amount;
-      locationStats.set(location, locData);
+    // Monthly aggregation
+    if (order.processedAt) {
+      const monthKey = order.processedAt.toLocaleDateString("en", {
+        year: "numeric",
+        month: "short",
+      });
+      const monthData = monthlyMap.get(monthKey) || { orders: 0, revenue: 0 };
+      monthData.orders += 1;
+      monthData.revenue += order.totalPrice;
+      monthlyMap.set(monthKey, monthData);
     }
+
+    // Location aggregation
+    if (order.shippingCity) {
+      const location = order.shippingCity;
+      const locData = locationMap.get(location) || { orders: 0, revenue: 0 };
+      locData.orders += 1;
+      locData.revenue += order.totalPrice;
+      locationMap.set(location, locData);
+    }
+
+    // Product aggregation
+    order.lineItems.forEach((item: any) => {
+      const key = item.productTitle;
+      const stats = productMap.get(key) || {
+        name: key,
+        quantity: 0,
+        revenue: 0,
+        orders: 0,
+      };
+      stats.quantity += item.quantity;
+      stats.revenue += item.quantity * item.price;
+      stats.orders += 1;
+      productMap.set(key, stats);
+    });
   });
-  
+
   // Calculate customer segments
-  let newCustomers = 0, returningCustomers = 0, vipCustomers = 0;
-  customerOrders.forEach((count) => {
+  let newCustomers = 0,
+    returningCustomers = 0,
+    vipCustomers = 0;
+  customerMap.forEach((count) => {
     if (count === 1) newCustomers++;
     else if (count >= 5) vipCustomers++;
     else returningCustomers++;
   });
-  
-  // Convert maps to arrays (maintaining order for all 12 months of 2025)
-  const monthlyData = Array.from(monthlyStats, ([month, data]) => ({
-    month,
-    ...data,
-  }));
-  
-  const productData = Array.from(productStats.values())
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 10);
-  
-  const locationData = Array.from(locationStats, ([location, data]) => ({
-    location,
-    ...data,
-  }))
-    .sort((a, b) => b.orders - a.orders)
-    .slice(0, 10);
-  
+
   return {
     totalOrders: orders.length,
     totalRevenue,
-    averageOrderValue: orders.length > 0 ? totalRevenue / orders.length : 0,
+    averageOrderValue: totalRevenue / orders.length,
     fulfilledOrders: fulfilledCount,
     paidOrders: paidCount,
-    monthlyData,
-    productData,
+    monthlyData: Array.from(monthlyMap, ([month, data]) => ({
+      month,
+      ...data,
+    })),
+    productData: Array.from(productMap.values())
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 10),
     customerSegments: {
       new: newCustomers,
       returning: returningCustomers,
       vip: vipCustomers,
     },
-    locationData,
+    locationData: Array.from(locationMap, ([location, data]) => ({
+      location,
+      ...data,
+    }))
+      .sort((a, b) => b.orders - a.orders)
+      .slice(0, 10),
   };
 }
 
-// Metric Card Component
+/**
+ * Return empty analytics structure
+ */
+function getEmptyAnalytics(): AnalyticsData {
+  return {
+    totalOrders: 0,
+    totalRevenue: 0,
+    averageOrderValue: 0,
+    fulfilledOrders: 0,
+    paidOrders: 0,
+    monthlyData: [],
+    productData: [],
+    customerSegments: { new: 0, returning: 0, vip: 0 },
+    locationData: [],
+  };
+}
+
+// ============================================================================
+// UI COMPONENTS
+// ============================================================================
+
 type MetricCardProps = {
   title: string;
   value: React.ReactNode;
@@ -426,10 +556,14 @@ type MetricCardProps = {
   tone?: "default" | "success" | "warning";
 };
 
-function MetricCard({ title, value, change, icon, tone = "default" }: MetricCardProps) {
+function MetricCard({
+  title,
+  value,
+  change,
+  icon,
+}: MetricCardProps) {
   const isPositive = typeof change === "number" && change > 0;
-  const toneColor = tone === "success" ? "success" : tone === "warning" ? "warning" : "default";
-  
+
   return (
     <Card>
       <Box padding="400">
@@ -445,11 +579,15 @@ function MetricCard({ title, value, change, icon, tone = "default" }: MetricCard
           </Text>
           {change !== undefined && (
             <InlineStack gap="100" align="start">
-              <Icon 
-                source={isPositive ? ArrowUpIcon : ArrowDownIcon} 
-                tone={isPositive ? "success" : "critical"} 
+              <Icon
+                source={isPositive ? ArrowUpIcon : ArrowDownIcon}
+                tone={isPositive ? "success" : "critical"}
               />
-              <Text variant="bodySm" tone={isPositive ? "success" : "critical"} as="span">
+              <Text
+                variant="bodySm"
+                tone={isPositive ? "success" : "critical"}
+                as="span"
+              >
                 {Math.abs(change)}% {isPositive ? "increase" : "decrease"}
               </Text>
             </InlineStack>
@@ -461,245 +599,313 @@ function MetricCard({ title, value, change, icon, tone = "default" }: MetricCard
 }
 
 export default function AnalyticsDashboard() {
-  const { analytics, shop } = useLoaderData<typeof loader>();
+  const { analytics, shop, syncStatus, dataSource, cacheHit, timeRange } =
+    useLoaderData<LoaderData>();
   const navigate = useNavigate();
-  const [selectedPeriod, setSelectedPeriod] = useState("30days");
   const [refreshing, setRefreshing] = useState(false);
-  
-  const handleRefresh = useCallback(async () => {
+
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    // Trigger a page refresh to reload data
-    navigate(".", { replace: true });
-    setTimeout(() => setRefreshing(false), 1000);
+    navigate("/app/sync?return=/app/analytics");
   }, [navigate]);
-  
-  // Filter monthly data based on selected period
-  const getFilteredMonthlyData = useCallback(() => {
-    if (selectedPeriod === "year") {
-      // Show all months for year view
-      return analytics.monthlyData;
-    }
-    
-    const now = new Date();
-    const currentMonth = now.getMonth(); // 0-11 (Sep = 8)
-    const currentYear = now.getFullYear();
-    
-    let monthsToShow: number;
-    
-    switch (selectedPeriod) {
-      case "30days":
-        monthsToShow = 1;
-        break;
-      case "3months":
-        monthsToShow = 3;
-        break;
-      case "6months":
-        monthsToShow = 6;
-        break;
-      default:
-        monthsToShow = 12;
-    }
-    
-    // Get the month names we want to show
-    const monthsToInclude: string[] = [];
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    // Calculate which months to show (going backwards from current month)
-    for (let i = 0; i < monthsToShow; i++) {
-      let targetMonth = currentMonth - i;
-      let targetYear = currentYear;
-      
-      // Handle year boundary
-      if (targetMonth < 0) {
-        targetMonth += 12;
-        targetYear -= 1;
-      }
-      
-      monthsToInclude.push(`${monthNames[targetMonth]} ${targetYear}`);
-    }
-    
-    // Filter and reverse to show chronologically
-    const filtered = analytics.monthlyData.filter((data) => 
-      monthsToInclude.includes(data.month)
-    );
-    
-    // Sort by date to ensure proper order
-    return filtered.sort((a, b) => {
-      const dateA = new Date(a.month);
-      const dateB = new Date(b.month);
-      return dateA.getTime() - dateB.getTime();
-    });
-  }, [selectedPeriod, analytics.monthlyData]);
-  
-  const filteredMonthlyData = getFilteredMonthlyData();
-  
-  const COLORS = ['#5C6AC4', '#006FBB', '#47C1BF', '#50B83C', '#F49342', '#E3524F'];
-  
-  // Format currency
+
+  const handleTimeRangeChange = useCallback((range: string) => {
+    navigate(`/app/analytics?range=${range}`);
+  }, [navigate]);
+
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
   };
-  
-  // Format number
+
   const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US').format(num);
+    return new Intl.NumberFormat("en-US").format(num);
   };
-  
+
+  const formatTimestamp = (timestamp: string | null) => {
+    if (!timestamp) return "Never";
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  const COLORS = [
+    "#5C6AC4",
+    "#006FBB",
+    "#47C1BF",
+    "#50B83C",
+    "#F49342",
+    "#E3524F",
+  ];
+
+  // Show empty state if no data
+  if (!syncStatus.hasData || dataSource === "empty") {
+    return (
+      <Page
+        title="Analytics Dashboard"
+        subtitle={`Analytics for ${shop}`}
+        primaryAction={{
+          content: "Sync Data",
+          onAction: () => navigate("/app/sync"),
+        }}
+      >
+        <Layout>
+          <Layout.Section>
+            <Banner
+              title="No data available"
+              tone="info"
+              action={{ content: "Sync Orders", onAction: () => navigate("/app/sync") }}
+            >
+              <p>
+                To view analytics, you need to sync your orders and products first.
+                Click the button above to start syncing data from Shopify.
+              </p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
   return (
     <Page
       title="Analytics Dashboard"
       subtitle={`Real-time insights for ${shop}`}
-      primaryAction={
-        <Button
-          onClick={handleRefresh}
-          loading={refreshing}
-          icon={RefreshIcon}
-        >
-          Refresh Data
-        </Button>
-      }
+      primaryAction={{
+        content: "Refresh Data",
+        onAction: handleRefresh,
+        loading: refreshing || syncStatus.syncInProgress,
+        icon: RefreshIcon,
+      }}
       secondaryActions={[
         {
-          content: "Export Report",
-          onAction: () => console.log("Export report"),
+          content: "Sync Data",
+          onAction: () => navigate("/app/sync"),
         },
         {
-          content: "Configure Alerts",
-          onAction: () => navigate("/app/control-tower"),
+          content: "Compute Analytics",
+          onAction: () => navigate("/app/compute-analytics"),
         },
       ]}
     >
       <Layout>
+        {/* Data Freshness Indicator */}
+        <Layout.Section>
+          <Card>
+            <Box padding="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <InlineStack gap="200" blockAlign="center">
+                  <Icon source={ClockIcon} tone="subdued" />
+                  <Text variant="bodyMd" as="span">
+                    Last synced: {formatTimestamp(syncStatus.lastOrderSync)}
+                  </Text>
+                  {syncStatus.syncInProgress && (
+                    <Badge tone="info">Syncing...</Badge>
+                  )}
+                  {cacheHit && (
+                    <Badge tone="success">⚡ Cached</Badge>
+                  )}
+                  {!cacheHit && dataSource === "computed" && (
+                    <Badge tone="warning">Live data (no snapshots)</Badge>
+                  )}
+                  {!cacheHit && dataSource === "snapshot" && (
+                    <Badge tone="info">Pre-computed</Badge>
+                  )}
+                </InlineStack>
+                <Text variant="bodySm" tone="subdued" as="span">
+                  {syncStatus.totalOrders} orders • {syncStatus.totalProducts}{" "}
+                  products in database
+                </Text>
+              </InlineStack>
+            </Box>
+          </Card>
+        </Layout.Section>
+
+        {/* Time Range Filter */}
+        <Layout.Section>
+          <Card>
+            <Box padding="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <Text variant="bodyMd" as="span">
+                  Time Range:
+                </Text>
+                <ButtonGroup variant="segmented">
+                  <Button
+                    pressed={timeRange === "1month"}
+                    onClick={() => handleTimeRangeChange("1month")}
+                  >
+                    1 Month
+                  </Button>
+                  <Button
+                    pressed={timeRange === "3months"}
+                    onClick={() => handleTimeRangeChange("3months")}
+                  >
+                    3 Months
+                  </Button>
+                  <Button
+                    pressed={timeRange === "6months"}
+                    onClick={() => handleTimeRangeChange("6months")}
+                  >
+                    6 Months
+                  </Button>
+                  <Button
+                    pressed={timeRange === "year"}
+                    onClick={() => handleTimeRangeChange("year")}
+                  >
+                    This Year
+                  </Button>
+                  <Button
+                    pressed={timeRange === "12months"}
+                    onClick={() => handleTimeRangeChange("12months")}
+                  >
+                    12 Months
+                  </Button>
+                  <Button
+                    pressed={timeRange === "alltime"}
+                    onClick={() => handleTimeRangeChange("alltime")}
+                  >
+                    All Time
+                  </Button>
+                </ButtonGroup>
+              </InlineStack>
+            </Box>
+          </Card>
+        </Layout.Section>
+
         {/* Key Metrics Section */}
         <Layout.Section>
           <BlockStack gap="400">
             <Text variant="headingMd" as="h2">
               Key Performance Metrics
             </Text>
-            <InlineGrid columns={{ xs: 1, sm: 2, md: 2, lg: 4, xl: 4 }} gap="400">
+            <InlineGrid
+              columns={{ xs: 1, sm: 2, md: 2, lg: 4, xl: 4 }}
+              gap="400"
+            >
               <MetricCard
                 title="Total Orders"
                 value={formatNumber(analytics.totalOrders)}
-                change={12.5}
                 icon={PackageIcon}
               />
               <MetricCard
                 title="Total Revenue"
                 value={formatCurrency(analytics.totalRevenue)}
-                change={18.3}
                 icon={CashDollarIcon}
                 tone="success"
               />
               <MetricCard
                 title="Average Order Value"
                 value={formatCurrency(analytics.averageOrderValue)}
-                change={-5.2}
                 icon={ArrowUpIcon}
               />
               <MetricCard
                 title="Fulfillment Rate"
-                value={`${Math.round((analytics.fulfilledOrders / analytics.totalOrders) * 100)}%`}
-                change={8.7}
+                value={
+                  analytics.totalOrders > 0
+                    ? `${Math.round(
+                        (analytics.fulfilledOrders / analytics.totalOrders) *
+                          100
+                      )}%`
+                    : "0%"
+                }
                 icon={PackageIcon}
               />
             </InlineGrid>
           </BlockStack>
         </Layout.Section>
-        
+
         {/* Monthly Trend Chart */}
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <BlockStack gap="400">
-                <InlineStack align="space-between">
-                  <Text variant="headingMd" as="h2">
-                    Monthly Sales Trend
-                  </Text>
-                  <Select
-                    label="Period"
-                    labelHidden
-                    options={[
-                      { label: "Last 30 days", value: "30days" },
-                      { label: "Last 3 months", value: "3months" },
-                      { label: "Last 6 months", value: "6months" },
-                      { label: "Last year", value: "year" },
-                    ]}
-                    value={selectedPeriod}
-                    onChange={setSelectedPeriod}
-                  />
-                </InlineStack>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={filteredMonthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip 
-                      formatter={(value, name) => {
-                        if (name === 'revenue') return formatCurrency(value as number);
-                        return value;
-                      }}
-                    />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="#5C6AC4"
-                      fill="#5C6AC4"
-                      fillOpacity={0.6}
-                      name="Revenue"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="orders"
-                      stroke="#50B83C"
-                      fill="#50B83C"
-                      fillOpacity={0.6}
-                      name="Orders"
-                      yAxisId="right"
-                    />
-                    <YAxis yAxisId="right" orientation="right" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </BlockStack>
-            </Box>
-          </Card>
-        </Layout.Section>
-        
-        {/* Product Performance and Customer Segments */}
-        <Layout.Section>
-          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
-            {/* Top Products */}
+        {analytics.monthlyData.length > 0 && (
+          <Layout.Section>
             <Card>
               <Box padding="400">
                 <BlockStack gap="400">
                   <Text variant="headingMd" as="h2">
-                    Top Products by Quantity
+                    Monthly Sales Trend
                   </Text>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={analytics.productData.slice(0, 5)}>
+                    <AreaChart data={analytics.monthlyData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="name" 
-                        angle={-45}
-                        textAnchor="end"
-                        height={100}
-                        interval={0}
-                        tick={{ fontSize: 10 }}
-                      />
+                      <XAxis dataKey="month" />
                       <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="quantity" fill="#5C6AC4" />
-                    </BarChart>
+                      <Tooltip
+                        formatter={(value, name) => {
+                          if (name === "revenue")
+                            return formatCurrency(value as number);
+                          return value;
+                        }}
+                      />
+                      <Legend />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#5C6AC4"
+                        fill="#5C6AC4"
+                        fillOpacity={0.6}
+                        name="Revenue"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="orders"
+                        stroke="#50B83C"
+                        fill="#50B83C"
+                        fillOpacity={0.6}
+                        name="Orders"
+                        yAxisId="right"
+                      />
+                      <YAxis yAxisId="right" orientation="right" />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </BlockStack>
               </Box>
             </Card>
-            
+          </Layout.Section>
+        )}
+
+        {/* Product Performance and Customer Segments */}
+        <Layout.Section>
+          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+            {/* Top Products */}
+            {analytics.productData.length > 0 && (
+              <Card>
+                <Box padding="400">
+                  <BlockStack gap="400">
+                    <Text variant="headingMd" as="h2">
+                      Top Products by Quantity
+                    </Text>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={analytics.productData.slice(0, 5)}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="name"
+                          angle={-45}
+                          textAnchor="end"
+                          height={100}
+                          interval={0}
+                          tick={{ fontSize: 10 }}
+                        />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="quantity" fill="#5C6AC4" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </BlockStack>
+                </Box>
+              </Card>
+            )}
+
             {/* Customer Segments */}
             <Card>
               <Box padding="400">
@@ -711,15 +917,28 @@ export default function AnalyticsDashboard() {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'New', value: analytics.customerSegments.new },
-                          { name: 'Returning', value: analytics.customerSegments.returning },
-                          { name: 'VIP (5+ orders)', value: analytics.customerSegments.vip },
+                          {
+                            name: "New",
+                            value: analytics.customerSegments.new,
+                          },
+                          {
+                            name: "Returning",
+                            value: analytics.customerSegments.returning,
+                          },
+                          {
+                            name: "VIP (5+ orders)",
+                            value: analytics.customerSegments.vip,
+                          },
                         ]}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
                         label={(props: { name?: string; percent?: number }) =>
-                          `${props.name ?? ''} ${props.percent !== undefined ? (props.percent * 100).toFixed(0) : '0'}%`
+                          `${props.name ?? ""} ${
+                            props.percent !== undefined
+                              ? (props.percent * 100).toFixed(0)
+                              : "0"
+                          }%`
                         }
                         outerRadius={80}
                         fill="#8884d8"
@@ -742,53 +961,67 @@ export default function AnalyticsDashboard() {
             </Card>
           </InlineGrid>
         </Layout.Section>
-        
+
         {/* Location Analysis */}
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">
-                  Top Locations by Orders
-                </Text>
-                <DataTable
-                  columnContentTypes={["text", "numeric", "numeric"]}
-                  headings={["Location", "Orders", "Revenue"]}
-                  rows={analytics.locationData.map(loc => [
-                    loc.location,
-                    loc.orders.toString(),
-                    formatCurrency(loc.revenue),
-                  ])}
-                  sortable={[true, true, true]}
-                />
-              </BlockStack>
-            </Box>
-          </Card>
-        </Layout.Section>
-        
+        {analytics.locationData.length > 0 && (
+          <Layout.Section>
+            <Card>
+              <Box padding="400">
+                <BlockStack gap="400">
+                  <Text variant="headingMd" as="h2">
+                    Top Locations by Orders
+                  </Text>
+                  <DataTable
+                    columnContentTypes={["text", "numeric", "numeric"]}
+                    headings={["Location", "Orders", "Revenue"]}
+                    rows={analytics.locationData.map((loc) => [
+                      loc.location,
+                      loc.orders.toString(),
+                      formatCurrency(loc.revenue),
+                    ])}
+                    sortable={[true, true, true]}
+                  />
+                </BlockStack>
+              </Box>
+            </Card>
+          </Layout.Section>
+        )}
+
         {/* Product Details Table */}
-        <Layout.Section>
-          <Card>
-            <Box padding="400">
-              <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">
-                  Product Performance Details
-                </Text>
-                <DataTable
-                  columnContentTypes={["text", "numeric", "numeric", "numeric"]}
-                  headings={["Product", "Quantity Sold", "Orders", "Revenue"]}
-                  rows={analytics.productData.map(product => [
-                    product.name,
-                    product.quantity.toString(),
-                    product.orders.toString(),
-                    formatCurrency(product.revenue),
-                  ])}
-                  sortable={[true, true, true, true]}
-                />
-              </BlockStack>
-            </Box>
-          </Card>
-        </Layout.Section>
+        {analytics.productData.length > 0 && (
+          <Layout.Section>
+            <Card>
+              <Box padding="400">
+                <BlockStack gap="400">
+                  <Text variant="headingMd" as="h2">
+                    Product Performance Details
+                  </Text>
+                  <DataTable
+                    columnContentTypes={[
+                      "text",
+                      "numeric",
+                      "numeric",
+                      "numeric",
+                    ]}
+                    headings={[
+                      "Product",
+                      "Quantity Sold",
+                      "Orders",
+                      "Revenue",
+                    ]}
+                    rows={analytics.productData.map((product) => [
+                      product.name,
+                      product.quantity.toString(),
+                      product.orders.toString(),
+                      formatCurrency(product.revenue),
+                    ])}
+                    sortable={[true, true, true, true]}
+                  />
+                </BlockStack>
+              </Box>
+            </Card>
+          </Layout.Section>
+        )}
       </Layout>
     </Page>
   );
