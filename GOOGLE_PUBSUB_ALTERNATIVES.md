@@ -1,6 +1,5 @@
 # Google Cloud Pub/Sub Alternatives & Solutions
 
-## The Problem
 
 You're seeing: "The selected project and billing account cannot pay for GCP in your region."
 

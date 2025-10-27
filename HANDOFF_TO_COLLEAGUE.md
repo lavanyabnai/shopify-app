@@ -8,7 +8,7 @@
 **Repository:** https://github.com/lavanyabnai/shopify-app
 
 ---
-
+---------------
 ## What's Complete
 
 ### Full BFCM War Room Feature ✅
