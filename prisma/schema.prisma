@@ -44,3 +44,117 @@ model QRCode {
   scans            Int      @default(0)
   createdAt        DateTime @default(now())
 }
+
+// Analytics Models for Dashboard Optimization
+
+model Order {
+  id                String       @id // Shopify GID (e.g., "gid://shopify/Order/123")
+  shopifyOrderId    String       // Numeric ID
+  name              String       // Order number (e.g., "#1001")
+  shop              String
+  email             String?
+  totalPrice        Float
+  currency          String       @default("USD")
+  financialStatus   String?      // PAID, PENDING, REFUNDED, etc.
+  fulfillmentStatus String?      // FULFILLED, UNFULFILLED, etc.
+  processedAt       DateTime?    // When order was processed
+  createdAt         DateTime
+  updatedAt         DateTime     @updatedAt
+
+  // Customer info
+  customerId        String?
+  customerEmail     String?
+
+  // Shipping address
+  shippingCity      String?
+  shippingProvince  String?
+  shippingCountry   String?
+
+  // Relations
+  lineItems         OrderLineItem[]
+
+  // Indexes for fast queries
+  @@index([shop, processedAt])
+  @@index([shop, createdAt])
+  @@index([shop, financialStatus])
+}
+
+model OrderLineItem {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Product info
+  productId       String
+  productTitle    String
+  variantId       String
+  variantTitle    String?
+  quantity        Int
+  price           Float
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Product {
+  id              String   @id // Shopify GID
+  shop            String
+  title           String
+  productType     String?
+  vendor          String?
+  totalInventory  Int      @default(0)
+  status          String   @default("active") // active, archived, draft
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shop, status])
+  @@index([shop, productType])
+}
+
+model AnalyticsSnapshot {
+  id              String   @id @default(cuid())
+  shop            String
+  date            DateTime // Date this snapshot represents
+  period          String   // 'daily', 'weekly', 'monthly', 'yearly'
+
+  // Core metrics
+  totalOrders     Int      @default(0)
+  totalRevenue    Float    @default(0)
+  avgOrderValue   Float    @default(0)
+  fulfilledOrders Int      @default(0)
+  paidOrders      Int      @default(0)
+
+  // Complex aggregated data stored as JSON
+  topProducts     String?  // JSON: [{ name, quantity, revenue }]
+  topLocations    String?  // JSON: [{ location, orders, revenue }]
+  customerSegments String? // JSON: { new: N, returning: N, vip: N }
+  monthlyTrend    String?  // JSON: [{ month, orders, revenue }]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Composite unique constraint
+  @@unique([shop, date, period])
+  @@index([shop, date])
+  @@index([shop, period])
+}
+
+model SyncStatus {
+  id              String   @id @default(cuid())
+  shop            String   @unique
+
+  // Sync timestamps
+  lastOrderSync   DateTime?
+  lastProductSync DateTime?
+  syncInProgress  Boolean  @default(false)
+
+  // Stats
+  totalOrders     Int      @default(0)
+  totalProducts   Int      @default(0)
+
+  // Error tracking
+  lastError       String?
+  lastErrorAt     DateTime?
+
+  updatedAt       DateTime @updatedAt
+}

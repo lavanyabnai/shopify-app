@@ -30,7 +30,27 @@ import { ImageIcon } from "@shopify/polaris-icons";
 import db from "../db.server";
 import { getQRCode, validateQRCode } from "../models/QRCode.server";
 
-export async function loader({ request, params }) {
+// Type definitions
+interface QRCodeData {
+  id?: number;
+  title: string;
+  productId: string;
+  productHandle: string;
+  productVariantId: string;
+  productTitle?: string;
+  productAlt?: string;
+  productImage?: string;
+  destination: string;
+  destinationUrl?: string;
+  image?: string;
+  shop: string;
+}
+
+interface ActionData {
+  errors?: Record<string, string>;
+}
+
+export async function loader({ request, params }: { request: Request; params: { id: string } }) {
   const { admin } = await authenticate.admin(request);
 
   if (params.id === "new") {
@@ -43,19 +63,25 @@ export async function loader({ request, params }) {
   return json(await getQRCode(Number(params.id), admin.graphql));
 }
 
-export async function action({ request, params }) {
+export async function action({ request, params }: { request: Request; params: { id: string } }) {
   const { session } = await authenticate.admin(request);
   const { shop } = session;
 
-  /** @type {any} */
-  const data = {
-    ...Object.fromEntries(await request.formData()),
+  const formData = await request.formData();
+  const data: Partial<QRCodeData> = {
+    title: formData.get("title") as string || "",
+    productId: formData.get("productId") as string || "",
+    productHandle: formData.get("productHandle") as string || "",
+    productVariantId: formData.get("productVariantId") as string || "",
+    destination: formData.get("destination") as string || "product",
     shop,
   };
 
-  if (data.action === "delete") {
-    await db.qRCode.delete({ where: { id: Number(params.id) } });
-    return redirect("/app");
+  if (request.method === "POST") {
+    if (formData.get("action") === "delete") {
+      await db.qRCode.delete({ where: { id: Number(params.id) } });
+      return redirect("/app");
+    }
   }
 
   const errors = validateQRCode(data);
@@ -66,18 +92,38 @@ export async function action({ request, params }) {
 
   const qrCode =
     params.id === "new"
-      ? await db.qRCode.create({ data })
-      : await db.qRCode.update({ where: { id: Number(params.id) }, data });
+      ? await db.qRCode.create({ 
+          data: {
+            title: data.title || "",
+            productId: data.productId || "",
+            productHandle: data.productHandle || "",
+            productVariantId: data.productVariantId || "",
+            destination: data.destination || "product",
+            shop: data.shop || "",
+          }
+        })
+      : await db.qRCode.update({ 
+          where: { id: Number(params.id) }, 
+          data: {
+            title: data.title || "",
+            productId: data.productId || "",
+            productHandle: data.productHandle || "",
+            productVariantId: data.productVariantId || "",
+            destination: data.destination || "product",
+            shop: data.shop || "",
+          }
+        });
 
   return redirect(`/app/qrcodes/${qrCode.id}`);
 }
 
 export default function QRCodeForm() {
-  const errors = useActionData()?.errors || {};
+  const actionData = useActionData<ActionData>();
+  const errors = actionData?.errors || {};
 
-  const qrCode = useLoaderData();
-  const [formState, setFormState] = useState(qrCode);
-  const [cleanFormState, setCleanFormState] = useState(qrCode);
+  const qrCode = useLoaderData<typeof loader>() as QRCodeData;
+  const [formState, setFormState] = useState<QRCodeData>(qrCode);
+  const [cleanFormState, setCleanFormState] = useState<QRCodeData>(qrCode);
   const isDirty = JSON.stringify(formState) !== JSON.stringify(cleanFormState);
 
   const nav = useNavigation();
@@ -94,13 +140,18 @@ export default function QRCodeForm() {
       action: "select", // customized action verb, either 'select' or 'add',
     });
 
-    if (products) {
-      const { images, id, variants, title, handle } = products[0];
+    if (products && Array.isArray(products) && products.length > 0) {
+      const product = products[0] as any; // fallback to 'any' due to unknown type
+      const images = product.images || [];
+      const id = product.id;
+      const variants = product.variants || [];
+      const title = product.title;
+      const handle = product.handle;
 
       setFormState({
         ...formState,
         productId: id,
-        productVariantId: variants[0].id,
+        productVariantId: variants[0]?.id,
         productTitle: title,
         productHandle: handle,
         productAlt: images[0]?.altText,
@@ -119,7 +170,7 @@ export default function QRCodeForm() {
       destination: formState.destination,
     };
 
-    setCleanFormState({ ...formState });
+    setCleanFormState(formState);
     submit(data, { method: "post" });
   }
 
@@ -166,7 +217,7 @@ export default function QRCodeForm() {
                   <InlineStack blockAlign="center" gap="500">
                     <Thumbnail
                       source={formState.productImage || ImageIcon}
-                      alt={formState.productAlt}
+                      alt={formState.productAlt || ""}
                     />
                     <Text as="span" variant="headingMd" fontWeight="semibold">
                       {formState.productTitle}
@@ -227,7 +278,7 @@ export default function QRCodeForm() {
               QR code
             </Text>
             {qrCode ? (
-              <EmptyState image={qrCode.image} imageContained={true} />
+              <EmptyState image={qrCode.image || ""} imageContained={true} />
             ) : (
               <EmptyState image="">
                 Your QR code will appear here after you save
