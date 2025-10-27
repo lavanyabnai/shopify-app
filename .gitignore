@@ -9,10 +9,19 @@ node_modules
 /app/public/build
 /prisma/dev.sqlite
 /prisma/dev.sqlite-journal
+/prisma/*.sqlite
+/prisma/*.sqlite-journal
 database.sqlite
+*.sqlite
+*.sqlite-journal
 
 .env
 .env.*
+
+# Google Cloud credentials
+*-credentials.json
+credentials.json
+service-account*.json
 
 package-lock.json
 yarn.lock
@@ -23,3 +32,14 @@ pnpm-lock.yaml
 # Ignore shopify files created during app dev
 .shopify/*
 .shopify.lock
+
+# Log files
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development artifacts
+dev-*.sqlite
+test-*.sqlite
