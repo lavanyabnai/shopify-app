@@ -27,6 +27,10 @@ export const CACHE_KEYS = {
   SYNC_STATUS: (shop: string) => `${CACHE_VERSION}:sync:status:${shop}`,
   PRODUCT_DATA: (shop: string) => `${CACHE_VERSION}:products:${shop}`,
   ORDER_DATA: (shop: string) => `${CACHE_VERSION}:orders:${shop}`,
+  WAR_ROOM_DEFCON: (shop: string) => `${CACHE_VERSION}:war-room:defcon:${shop}`,
+  WAR_ROOM_REVENUE_RISK: (shop: string) => `${CACHE_VERSION}:war-room:revenue-risk:${shop}`,
+  WAR_ROOM_VELOCITY: (shop: string) => `${CACHE_VERSION}:war-room:velocity:${shop}`,
+  WAR_ROOM_PREDICTIONS: (shop: string, horizon: string) => `${CACHE_VERSION}:war-room:predictions:${horizon}:${shop}`,
 };
 
 /**

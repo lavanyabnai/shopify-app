@@ -39,10 +39,16 @@ A mission-critical command center for BFCM operations that helps merchants:
    # Check: Orders, Products, AnalyticsSnapshot tables have data
    ```
 
-4. **Webhooks syncing?**
+4. **GCP Pub/Sub webhooks syncing?**
    ```bash
-   shopify webhook trigger --topic orders/create
-   # Check logs for successful webhook processing
+   # Test GCP Pub/Sub webhook system
+   npm run test-gcp-pubsub
+   # Should show: "✅ All tests passed! Your GCP Pub/Sub setup is working correctly."
+
+   # Or verify consumer is receiving webhooks
+   npm run gcp-consumer
+   # Should show: "👂 Waiting for webhook messages..."
+   # Create a test order in Shopify Admin and verify webhook arrives
    ```
 
 ✅ **All good?** Proceed to Session 1!
@@ -75,7 +81,8 @@ I'm ready to start Session 1 of the BFCM War Room implementation. Please:
 Prerequisites check:
 - Analytics dashboard loads in <100ms (Session 6 from analytics optimization)
 - Redis cache is operational
-- Webhook sync is working
+- GCP Pub/Sub webhook system is working (test with: npm run test-gcp-pubsub)
+- GCP consumer is receiving webhooks (test with: npm run gcp-consumer)
 - Database has recent orders and products
 
 Please confirm prerequisites are met, then proceed with Session 1 deliverables.
@@ -304,6 +311,29 @@ npx prisma migrate reset
 - Graceful fallback to previous forecast
 - Don't block UI on external API
 
+### "GCP Pub/Sub webhooks not arriving"
+```bash
+# Verify GCP setup
+npm run check-gcp-setup
+# Should show all ✅
+
+# Test webhook system
+npm run test-gcp-pubsub
+# Should publish and receive test message
+
+# Start consumer
+npm run gcp-consumer
+# Should show: "👂 Waiting for webhook messages..."
+
+# Grant Shopify permission to publish (if needed)
+gcloud pubsub topics add-iam-policy-binding control-tower \
+  --member='serviceAccount:shopify-eventbridge@shopify-prs.iam.gserviceaccount.com' \
+  --role='roles/pubsub.publisher' \
+  --project=shop-webhooks
+```
+
+See [TESTING_GCP_PUBSUB_WEBHOOKS.md](TESTING_GCP_PUBSUB_WEBHOOKS.md) for detailed troubleshooting.
+
 ---
 
 ## 📞 Getting Help
@@ -393,6 +423,9 @@ Once all 8 sessions are done:
 - [CLAUDE.md](CLAUDE.md) - Project overview and architecture
 - [REDIS_DEPLOYMENT_GUIDE.md](REDIS_DEPLOYMENT_GUIDE.md) - Redis setup
 - [SESSION_6_SUMMARY.md](SESSION_6_SUMMARY.md) - Analytics optimization lessons
+- [TESTING_GCP_PUBSUB_WEBHOOKS.md](TESTING_GCP_PUBSUB_WEBHOOKS.md) - GCP Pub/Sub testing guide
+- [MULTI_MERCHANT_WEBHOOK_ARCHITECTURE.md](MULTI_MERCHANT_WEBHOOK_ARCHITECTURE.md) - Webhook architecture best practices
+- [GCP_PUBSUB_READY.md](GCP_PUBSUB_READY.md) - GCP Pub/Sub setup summary
 
 ---
 

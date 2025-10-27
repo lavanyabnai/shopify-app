@@ -1,0 +1,98 @@
+# Example shopify.app.toml with Google Cloud Pub/Sub webhooks
+#
+# To use this configuration:
+# 1. Backup your current shopify.app.toml
+# 2. Copy the [webhooks] section below to shopify.app.toml
+# 3. Run: npm run deploy
+# 4. Grant Shopify permission to publish to your topic (see below)
+
+name = "control-tower"
+client_id = "4a14d7f9a2aa6a560d71afeb29f4cbb6"
+application_url = "https://control-tower-2.myshopify.com/"
+embedded = true
+handle = "control-tower-app"
+
+[access_scopes]
+scopes = "write_products, read_products, read_orders, write_orders, read_customers, read_inventory, read_locations, read_analytics, read_reports, read_fulfillments, read_shipping, read_discounts, read_price_rules, read_marketing_events"
+
+[auth]
+redirect_urls = [
+  "https://control-tower-2.myshopify.com/auth/callback",
+  "https://control-tower-2.myshopify.com/auth/shopify/callback",
+  "https://control-tower-2.myshopify.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-10"
+
+# ============================================================================
+# OPTION 1: HTTP Webhooks (Current - RECOMMENDED)
+# ============================================================================
+# Use this if you want webhooks to hit your server first
+# Pros: More control, can transform data, add logging, etc.
+# Cons: Your server must be running to receive webhooks
+
+# Order webhooks for analytics dashboard sync
+[[webhooks.subscriptions]]
+topics = ["orders/create", "orders/updated", "orders/cancelled"]
+uri = "/webhooks/orders"
+
+# Product webhooks for inventory tracking
+[[webhooks.subscriptions]]
+topics = ["products/create", "products/update"]
+uri = "/webhooks/products"
+
+# ============================================================================
+# OPTION 2: Google Cloud Pub/Sub Webhooks (Alternative)
+# ============================================================================
+# Use this if you want Shopify to send webhooks directly to GCP Pub/Sub
+# Pros: Scales better, no server downtime issues, message queuing
+# Cons: Less control, harder to debug, requires GCP setup
+#
+# To enable:
+# 1. Comment out the HTTP webhooks above
+# 2. Uncomment the Pub/Sub webhooks below
+# 3. Run: npm run deploy
+# 4. Grant Shopify permission (see command below)
+
+# Order webhooks via Google Cloud Pub/Sub
+# [[webhooks.subscriptions]]
+# topics = ["orders/create", "orders/updated", "orders/cancelled"]
+# uri = "pubsub://shop-webhooks:control-tower"
+
+# Product webhooks via Google Cloud Pub/Sub
+# [[webhooks.subscriptions]]
+# topics = ["products/create", "products/update"]
+# uri = "pubsub://shop-webhooks:control-tower"
+
+# Inventory webhooks via Google Cloud Pub/Sub
+# [[webhooks.subscriptions]]
+# topics = ["inventory_levels/update"]
+# uri = "pubsub://shop-webhooks:control-tower"
+
+# ============================================================================
+# OPTION 3: Hybrid Approach (Best of Both Worlds)
+# ============================================================================
+# Keep HTTP webhooks for development, use Pub/Sub for production
+#
+# Development: HTTP webhooks hit your local server
+# Production: Pub/Sub webhooks for scalability
+#
+# Use environment-specific toml files:
+# - shopify.app.dev.toml (HTTP webhooks)
+# - shopify.app.prod.toml (Pub/Sub webhooks)
+
+[build]
+automatically_update_urls_on_dev = true
+
+# ============================================================================
+# After switching to Pub/Sub, run this command:
+# ============================================================================
+#
+# gcloud pubsub topics add-iam-policy-binding control-tower \
+#   --member='serviceAccount:shopify-eventbridge@shopify-prs.iam.gserviceaccount.com' \
+#   --role='roles/pubsub.publisher' \
+#   --project=shop-webhooks
+#
+# Then start the consumer:
+# npm run gcp-consumer

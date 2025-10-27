@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { json } from "@remix-run/node";
 import { inventoryMonitor } from "../utils/inventory-monitor";
+import { getPubSubManager } from "../services/pubsub-manager.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, session, topic, shop } = await authenticate.webhook(request);
@@ -41,6 +42,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       await inventoryMonitor.publishAlert(alert);
       console.log(`Alert published for SKU ${sku}: ${alert.alert_type} - ${alert.severity}`);
     }
+    
+    // Publish webhook event and inventory update to pub/sub system
+    const pubSubManager = getPubSubManager();
+    await pubSubManager.publishWebhookEvent(shop, topic, payload);
+    await pubSubManager.publishInventoryUpdate(sku, locationId, available);
     
     // Store inventory update in database (optional)
     // You can add database storage here if needed

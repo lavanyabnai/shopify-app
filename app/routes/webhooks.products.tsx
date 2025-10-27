@@ -1,6 +1,7 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import cache, { CACHE_KEYS } from "../services/cache.server";
+import { getPubSubManager } from "../services/pubsub-manager.server";
 import type { ActionFunctionArgs } from "@remix-run/node";
 
 /**
@@ -21,6 +22,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     await processProductWebhook(shop, topic, payload);
+    
+    // Publish webhook event to pub/sub system
+    const pubSubManager = getPubSubManager();
+    await pubSubManager.publishWebhookEvent(shop, topic, payload);
+    
     console.log(`✅ Successfully processed ${topic} webhook for product ${payload.title}`);
     return new Response("OK", { status: 200 });
   } catch (error) {

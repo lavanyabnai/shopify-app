@@ -158,3 +158,357 @@ model SyncStatus {
 
   updatedAt       DateTime @updatedAt
 }
+
+// ============================================================================
+// BFCM War Room Models (Session 1)
+// ============================================================================
+
+model WarRoomMetrics {
+  id                     String   @id @default(cuid())
+  shop                   String
+  defconLevel            Int      // 1-5 (1=Critical, 5=All Clear)
+  inventoryCoverageHours Float    // Average hours of inventory coverage
+  velocityAnomaly        Float    // Percentage of SKUs with abnormal velocity
+  riskScore              Float    // Overall risk score (0-100)
+  escalationTriggers     String   // JSON: reasons for current DEFCON level
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([shop, createdAt])
+}
+
+model InventorySnapshot {
+  id                String   @id @default(cuid())
+  shop              String
+  sku               String
+  productId         String
+  productTitle      String
+  location          String   // Inventory location
+  currentStock      Int      // Current available inventory
+  burnRate          Float    // Units sold per hour (rolling average)
+  coverageHours     Float    // Hours until stockout at current burn rate
+  reorderPoint      Int      // Recommended reorder point
+  velocityTrend     Float    // Velocity change % (positive = accelerating)
+  status            String   // 'healthy', 'warning', 'critical', 'stockout'
+  createdAt         DateTime @default(now())
+
+  @@index([shop, sku, location])
+  @@index([shop, status])
+  @@index([shop, coverageHours])
+  @@index([createdAt])
+}
+
+model AlertLog {
+  id              String   @id @default(cuid())
+  shop            String
+  severity        String   // 'critical', 'warning', 'info'
+  alertType       String   // 'defcon_escalation', 'stockout_imminent', 'velocity_spike', etc.
+  title           String
+  message         String
+  metadata        String   // JSON: additional context
+  acknowledged    Boolean  @default(false)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([shop, severity, createdAt])
+  @@index([shop, acknowledged])
+}
+
+// ============================================================================
+// BFCM War Room Models (Session 4) - Action Center
+// ============================================================================
+
+model RecommendedAction {
+  id              String   @id @default(cuid())
+  shop            String
+  type            String   // 'transfer', 'reorder', 'price_adjustment', 'traffic_throttle'
+  priority        Int      // 1-10 (10 = highest priority)
+  estimatedROI    Float    // Expected revenue impact in dollars
+  confidence      Float    // 0-100 confidence score
+  status          String   // 'pending', 'approved', 'executing', 'completed', 'failed', 'dismissed'
+
+  // Action-specific parameters (JSON)
+  parameters      String   // JSON: varies by action type
+
+  // Context
+  reason          String   // Human-readable explanation
+  urgency         String   // 'critical', 'high', 'medium', 'low'
+
+  // Metadata
+  sourceMetrics   String?  // JSON: metrics that triggered this recommendation
+  createdBy       String   @default("system") // 'system' or user ID
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime? // Time-sensitive recommendations expire
+
+  // Relations
+  executedActions ExecutedAction[]
+
+  @@index([shop, status, priority])
+  @@index([shop, type])
+  @@index([shop, urgency])
+  @@index([expiresAt])
+}
+
+model ExecutedAction {
+  id                String   @id @default(cuid())
+  shop              String
+  recommendationId  String
+  recommendation    RecommendedAction @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  // Execution details
+  result            String   // 'success', 'partial_success', 'failed'
+  resultMessage     String?  // Details about execution result
+
+  // Financial impact
+  actualRevenue     Float?   // Actual revenue impact (measured post-execution)
+  estimatedRevenue  Float?   // Expected revenue impact (from recommendation)
+  cost              Float?   // Cost of action (e.g., expedited shipping)
+  netROI            Float?   // actualRevenue - cost
+
+  // Audit trail
+  metadata          String   // JSON: execution details, API responses, etc.
+  executedBy        String   // User ID or 'system'
+  executedAt        DateTime @default(now())
+
+  // Rollback support
+  canRollback       Boolean  @default(false)
+  rolledBackAt      DateTime?
+  rollbackReason    String?
+
+  @@index([shop, recommendationId])
+  @@index([shop, executedAt])
+  @@index([shop, result])
+}
+
+model ActionTemplate {
+  id              String   @id @default(cuid())
+  shop            String?  // NULL = global template, otherwise shop-specific
+  name            String
+  description     String
+  type            String   // 'transfer', 'reorder', 'price_adjustment', 'traffic_throttle'
+
+  // Template parameters (JSON with placeholders)
+  parameters      String   // JSON: template with variables like {sku}, {quantity}, etc.
+
+  // Configuration
+  active          Boolean  @default(true)
+  autoApprove     Boolean  @default(false) // Auto-execute without human approval
+
+  // Metadata
+  createdBy       String   @default("system")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shop, type, active])
+  @@index([type, active])
+}
+
+// ============================================================================
+// BFCM War Room Models (Session 5) - Smart Alert System
+// ============================================================================
+
+model AlertRule {
+  id          String   @id @default(cuid())
+  shop        String
+  name        String   // Human-readable name
+  description String?  // Optional description
+
+  // Condition (JSON-based rule engine)
+  condition   String   // JSON: { type: 'defcon_level', operator: '<=', value: 2 }
+
+  // Alert configuration
+  severity    String   // 'critical', 'high', 'medium', 'low', 'info'
+  channels    String   // JSON: ['email', 'slack', 'sms', 'in_app']
+
+  // Deduplication & throttling
+  cooldownMinutes Int  @default(60) // Wait before sending another alert
+  maxAlertsPerDay Int  @default(10) // Prevent alert spam
+
+  // Status
+  active      Boolean  @default(true)
+
+  // Metadata
+  createdBy   String   @default("system")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  history     AlertHistory[]
+
+  @@index([shop, active])
+  @@index([shop, severity])
+}
+
+model AlertHistory {
+  id          String   @id @default(cuid())
+  shop        String
+  ruleId      String?  // NULL if manually triggered
+  rule        AlertRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  // Alert details
+  severity    String   // Copied from rule for historical reference
+  title       String
+  message     String
+  alertType   String   // 'defcon_escalation', 'stockout_imminent', 'velocity_spike', etc.
+
+  // Context
+  metadata    String   // JSON: snapshot of metrics that triggered alert
+
+  // Notification tracking
+  channels    String   // JSON: channels where alert was sent
+  emailSent   Boolean  @default(false)
+  slackSent   Boolean  @default(false)
+  smsSent     Boolean  @default(false)
+  inAppSent   Boolean  @default(false)
+
+  // Status
+  acknowledged    Boolean  @default(false)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  resolvedAt      DateTime?
+  resolution      String?  // Resolution notes
+
+  // Timestamps
+  triggeredAt DateTime @default(now())
+
+  @@index([shop, ruleId, triggeredAt])
+  @@index([shop, severity, triggeredAt])
+  @@index([shop, acknowledged])
+  @@index([shop, alertType])
+}
+
+model NotificationPreference {
+  id        String @id @default(cuid())
+  shop      String
+  userId    String @default("default") // User ID or 'default' for shop-wide settings
+
+  // Channel preferences
+  email     Boolean @default(true)
+  slack     Boolean @default(false)
+  sms       Boolean @default(false)
+  inApp     Boolean @default(true)
+
+  // Contact details
+  emailAddress String?
+  slackWebhook String?
+  phoneNumber  String?
+
+  // Severity filters (only send alerts at or above this severity)
+  minSeverity  String  @default("medium") // 'critical', 'high', 'medium', 'low', 'info'
+
+  // Quiet hours (JSON: { enabled: bool, start: 'HH:MM', end: 'HH:MM', timezone: 'TZ' })
+  quietHours   String? // JSON
+
+  // Metadata
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([shop, userId])
+  @@index([shop])
+}
+
+// ============================================================================
+// BFCM War Room Models (Session 7) - Simulation Command Center
+// ============================================================================
+
+model Simulation {
+  id          String   @id @default(cuid())
+  shop        String
+  name        String   // User-friendly name for the simulation
+  scenario    String   // Scenario type: 'flash_sale', 'traffic_spike', 'supplier_delay', 'carrier_outage'
+
+  // Simulation parameters (JSON)
+  parameters  String   // JSON: scenario-specific parameters
+
+  // Status tracking
+  status      String   // 'pending', 'running', 'completed', 'failed'
+  progress    Float    @default(0) // 0-100 percentage
+
+  // Results summary
+  impactScore Float?   // Overall impact score (0-100)
+  riskLevel   String?  // 'low', 'medium', 'high', 'critical'
+
+  // Metadata
+  createdBy   String   @default("system")
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Error tracking
+  errorMessage String?
+
+  // Relations
+  results     SimulationResult[]
+
+  @@index([shop, status])
+  @@index([shop, scenario])
+  @@index([shop, createdAt])
+}
+
+model SimulationResult {
+  id            String   @id @default(cuid())
+  simulationId  String
+  simulation    Simulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+
+  // Result category
+  category      String   // 'inventory', 'revenue', 'fulfillment', 'customer_impact'
+
+  // Metrics (JSON)
+  metrics       String   // JSON: detailed metrics for this category
+
+  // Predictions
+  predictions   String   // JSON: forecasted outcomes
+
+  // Recommendations (JSON)
+  recommendations String // JSON: suggested actions
+
+  // Impact assessment
+  impactScore   Float    // Category-specific impact score (0-100)
+  severity      String   // 'low', 'medium', 'high', 'critical'
+
+  // Comparison with baseline
+  baseline      String?  // JSON: baseline metrics for comparison
+  delta         Float?   // Percentage change from baseline
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+
+  @@index([simulationId])
+  @@index([simulationId, category])
+}
+
+model Playbook {
+  id          String @id @default(cuid())
+  shop        String?  // NULL = global playbook, otherwise shop-specific
+  name        String
+  description String
+
+  // Scenario targeting
+  scenario    String   // Which scenario this playbook is for
+  tags        String?  // JSON: ['bfcm', 'peak_season', 'emergency']
+
+  // Triggers (JSON: conditions that activate this playbook)
+  triggers    String   // JSON: { defcon_level: 1, revenue_at_risk: 50000 }
+
+  // Actions (JSON: ordered list of actions to execute)
+  actions     String   // JSON: [{ type: 'transfer', params: {...} }, ...]
+
+  // Configuration
+  active      Boolean @default(true)
+  autoExecute Boolean @default(false) // Auto-run when triggered
+  priority    Int     @default(5)     // 1-10 execution priority
+
+  // Usage tracking
+  timesUsed   Int     @default(0)
+  lastUsedAt  DateTime?
+
+  // Metadata
+  createdBy   String   @default("system")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shop, scenario, active])
+  @@index([scenario, active])
+}
