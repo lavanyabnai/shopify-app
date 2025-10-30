@@ -1,6 +1,7 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import cache, { CACHE_KEYS } from "../services/cache.server";
+import { invalidateCacheOnWebhook } from "../services/cache-strategy.server";
 import { getPubSubManager } from "../services/pubsub-manager.server";
 import type { ActionFunctionArgs } from "@remix-run/node";
 
@@ -106,10 +107,9 @@ async function processProductWebhook(shop: string, topic: string, product: any) 
     `💾 Saved product "${product.title}" (${totalInventory} total inventory) for ${shop}`
   );
 
-  // Invalidate analytics cache to ensure fresh data on next load
+  // Intelligent cache invalidation based on webhook topic
   try {
-    await cache.delete(CACHE_KEYS.ANALYTICS_SNAPSHOT(shop));
-    console.log(`🧹 Invalidated analytics cache for ${shop}`);
+    await invalidateCacheOnWebhook(shop, topic, product);
   } catch (error: any) {
     console.error(`⚠️ Failed to invalidate cache:`, error.message);
     // Don't throw - webhook should succeed even if cache invalidation fails

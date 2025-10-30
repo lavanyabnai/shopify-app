@@ -39,8 +39,12 @@
     "@shopify/polaris-icons": "^9.3.1",
     "@shopify/shopify-app-remix": "^4.0.2",
     "@shopify/shopify-app-session-storage-prisma": "^7.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.15.6",
+    "better-sqlite3": "^12.4.1",
     "ioredis": "^5.8.2",
     "isbot": "^5.1.0",
+    "pg": "^8.16.3",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -79,13 +83,13 @@
     "@graphql-codegen/client-preset": "4.7.0",
     "@graphql-codegen/typescript-operations": "4.5.0",
     "minimatch": "9.0.5",
-    "vite": "^6.2.2"
+    "vite": "^7.1.9"
   },
   "overrides": {
     "@graphql-tools/url-loader": "8.0.16",
     "@graphql-codegen/client-preset": "4.7.0",
     "@graphql-codegen/typescript-operations": "4.5.0",
     "minimatch": "9.0.5",
-    "vite": "^6.2.2"
+    "vite": "^7.1.9"
   }
 }
