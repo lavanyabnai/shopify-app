@@ -1,17 +1,3 @@
-/**
- * BFCM War Room - End-to-End Integration Test
- *
- * Comprehensive test that simulates a full BFCM day:
- * 1. Simulate full BFCM day with test data
- * 2. Trigger velocity spikes
- * 3. Generate stockout scenarios
- * 4. Execute recommended actions
- * 5. Verify alerts fire correctly
- * 6. Validate ROI tracking
- *
- * Session 8 - BFCM War Room
- */
-
 import { PrismaClient } from "@prisma/client";
 
 const db = new PrismaClient();
@@ -149,7 +135,7 @@ async function runE2ETest() {
     const defconTime = Date.now() - defconStart;
 
     console.log(`✅ DEFCON calculated in ${defconTime}ms`);
-    console.log(`   Level: ${defcon.level} (${defcon.status})`);
+    console.log(`   Level: ${defcon.level} (${defcon.label})`);
     console.log(`   Risk Score: ${defcon.riskScore.toFixed(1)}/100`);
     console.log(`   Critical SKUs: ${defcon.criticalSKUs}`);
     console.log(`   Coverage: ${defcon.inventoryCoverageHours.toFixed(1)} hours`);

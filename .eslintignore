@@ -2,5 +2,6 @@ node_modules
 build
 public/build
 shopify-app-remix
+analytics_service
 */*.yml
 .shopify

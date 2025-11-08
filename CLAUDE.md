@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Shopify embedded app built with Remix, designed as a control tower for inventory management and analytics. The app integrates with Shopify's Admin API and connects to an external FastAPI analytics backend.
+This is a **multi-merchant** Shopify embedded app built with Remix, designed as a control tower for inventory management and analytics. The app integrates with Shopify's Admin API and connects to an external FastAPI analytics backend.
+
+**Distribution:** Configured for App Store (public app) with multi-tenant architecture
+**Status:** 70% production-ready - see [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)
 
 ## Essential Commands
 
@@ -479,6 +482,23 @@ If your colleague is joining this project, direct them to:
 1. **[COLLABORATION_GUIDE.md](COLLABORATION_GUIDE.md)** - Complete guide for working together on this repo
 2. **[START_HERE.md](START_HERE.md)** - Quick start guide (5 minutes to get running)
 3. **[BFCM_WAR_ROOM_COMPLETE.md](BFCM_WAR_ROOM_COMPLETE.md)** - Full feature documentation
+
+## Production Deployment (NEW - October 2025)
+
+For deploying this app to support multiple merchants:
+
+1. **[MULTI_MERCHANT_QUICK_START.md](MULTI_MERCHANT_QUICK_START.md)** - Quick overview (5 minutes)
+2. **[PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md)** - Complete deployment guide
+
+**Current Status:** 70% production-ready
+- ✅ Multi-tenant database architecture
+- ✅ Modern authentication (session tokens)
+- ✅ GDPR compliance webhooks
+- ✅ Performance optimization (3-tier caching)
+- ⚠️ Need: Repository pattern for shop isolation
+- ⚠️ Need: Access token encryption
+- ⚠️ Need: Multi-tenant isolation tests
+- ⚠️ Need: Error monitoring (Sentry)
 
 ### Quick Clone & Setup
 
