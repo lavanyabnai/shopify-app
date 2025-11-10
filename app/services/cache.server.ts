@@ -225,6 +225,15 @@ class CacheService {
   }
 
   /**
+   * Clear all cache data for a shop (alias for GDPR compliance)
+   * Used during shop redaction to ensure no cached data remains
+   */
+  async clearShopCache(shop: string): Promise<void> {
+    console.log(`🗑️ Clearing all cache data for shop: ${shop} (GDPR compliance)`);
+    await this.deletePattern(`${CACHE_VERSION}:*:${shop}*`);
+  }
+
+  /**
    * Check if Redis is available
    */
   async isAvailable(): Promise<boolean> {

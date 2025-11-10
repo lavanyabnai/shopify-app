@@ -25,6 +25,7 @@ export default function App() {
         <Link to="/app" rel="home">
           Home
         </Link>
+        <Link to="/inv">Inventory</Link>
         <Link to="/app/war-room">🚨 BFCM War Room</Link>
         <Link to="/app/service">Service Dashboard</Link>
         <Link to="/app/sku">SKU Dashboard</Link>
