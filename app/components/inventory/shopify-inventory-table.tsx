@@ -491,6 +491,7 @@ export default function ShopifyInventoryTable() {
 
   return (
     <Page
+      fullWidth
       title="Shopify Inventory Management"
       subtitle="Manage inventory levels, states, and adjustments across all locations"
       primaryAction={{

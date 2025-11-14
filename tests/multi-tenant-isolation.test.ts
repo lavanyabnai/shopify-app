@@ -192,7 +192,7 @@ describe('Multi-Tenant Data Isolation', () => {
   describe('War Room Data Isolation', () => {
     it('should isolate inventory snapshots between shops', async () => {
       // Create inventory snapshot for Shop A
-      const snapshotA = await db.inventorySnapshot.create({
+      await db.inventorySnapshot.create({
         data: {
           shop: SHOP_A,
           sku: 'TEST-SKU-A',
@@ -209,7 +209,7 @@ describe('Multi-Tenant Data Isolation', () => {
       });
 
       // Create inventory snapshot for Shop B
-      const snapshotB = await db.inventorySnapshot.create({
+      await db.inventorySnapshot.create({
         data: {
           shop: SHOP_B,
           sku: 'TEST-SKU-B',

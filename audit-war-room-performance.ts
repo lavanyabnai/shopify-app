@@ -14,8 +14,6 @@
 
 import { PrismaClient } from "@prisma/client";
 
-const db = new PrismaClient();
-
 // Import all War Room services
 import { calculateDEFCON, getLatestDEFCON } from "./app/services/defcon-calculator.server.js";
 import { calculateRevenueRisk } from "./app/services/revenue-risk.server.js";
@@ -30,6 +28,8 @@ import { getCompetitiveIntelligence } from "./app/services/competitive-intel.ser
 import { runSimulation } from "./app/services/simulation-engine.server.js";
 import { generateROIReport } from "./app/services/roi-tracker.server.js";
 import { generateAttributionReport } from "./app/services/attribution-engine.server.js";
+
+const db = new PrismaClient();
 
 const TEST_SHOP = "test-shop.myshopify.com";
 

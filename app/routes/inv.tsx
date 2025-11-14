@@ -1,12 +1,49 @@
-import { Outlet } from "@remix-run/react";
+import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { boundary } from "@shopify/shopify-app-remix/server";
+import { AppProvider } from "@shopify/shopify-app-remix/react";
+import { NavMenu } from "@shopify/app-bridge-react";
+import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+
+import { authenticate } from "../shopify.server";
+
+export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  await authenticate.admin(request);
+
+  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+};
 
 export default function InventoryLayout() {
-  return (
-      <div className="min-h-screen mx-2">
-        <main>
-          <Outlet />
-        </main>
-      </div>
+  const { apiKey } = useLoaderData<typeof loader>();
 
+  return (
+    <AppProvider isEmbeddedApp apiKey={apiKey}>
+      <NavMenu>
+        <Link to="/app" rel="home">
+          Home
+        </Link>
+        <Link to="/inv/control-tower">📦 Supply Chain Control Tower</Link>
+        <Link to="/inv/demand-balancing">Demand Balancing</Link>
+        <Link to="/inv/finishGoods">Inventory Management</Link>
+        <Link to="/inv/finished-goods">Finished Goods</Link>
+        <Link to="/inv/shopify-inventory">Shopify Inventory</Link>
+        <Link to="/app/war-room">🚨 BFCM War Room</Link>
+        <Link to="/app/analytics">Analytics Dashboard</Link>
+        <Link to="/app/service">Service Dashboard</Link>
+        <Link to="/app/sku">SKU Dashboard</Link>
+      </NavMenu>
+      <Outlet />
+    </AppProvider>
   );
 }
+
+// Shopify needs Remix to catch some thrown responses, so that their headers are included in the response.
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
+}
+
+export const headers: HeadersFunction = (headersArgs) => {
+  return boundary.headers(headersArgs);
+};

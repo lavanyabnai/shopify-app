@@ -11,7 +11,8 @@
  * 4. (Optional) Events are published to internal Redis Pub/Sub
  */
 
-import { PubSub, Message } from '@google-cloud/pubsub';
+import type { Message } from '@google-cloud/pubsub';
+import { PubSub } from '@google-cloud/pubsub';
 import db from '../db.server';
 import { generateDailyAnalytics } from './analytics-aggregator.server';
 import cache, { CACHE_KEYS } from './cache.server';

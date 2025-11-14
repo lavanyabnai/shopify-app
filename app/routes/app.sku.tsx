@@ -571,8 +571,8 @@ export default function SKUPrioritizationDashboard() {
                         <ResponsiveContainer width="100%" height={400}>
                           <BarChart data={productGroupChartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
-                            <XAxis 
-                              dataKey="name" 
+                            <XAxis
+                              dataKey="name"
                               tick={{ fontSize: 11, fill: COLORS.subdued }}
                               angle={-45}
                               textAnchor="end"

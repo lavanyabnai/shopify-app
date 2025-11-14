@@ -1,12 +1,25 @@
-"use client"
-
-import { Badge } from "../ui/badge"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
-import { MoreHorizontal, AlertTriangle, Search, Filter, RotateCcw, TrendingUp } from "lucide-react"
-import { Link } from "@remix-run/react"
+import { useState, useCallback } from "react"
+import {
+  Page,
+  Layout,
+  Card,
+  Badge,
+  Text,
+  InlineStack,
+  BlockStack,
+  Box,
+  Button,
+  Banner,
+  TextField,
+  Icon,
+  Popover,
+  ActionList,
+  IndexTable,
+  useIndexResourceState,
+  LegacyStack,
+} from "@shopify/polaris"
+import { AlertTriangleIcon, ChartVerticalIcon } from "@shopify/polaris-icons"
+import { useNavigate } from "@remix-run/react"
 
 interface ReturnsRMAData {
   rmaNumber: string
@@ -221,42 +234,30 @@ const returnsRMAData: ReturnsRMAData[] = [
 function getAlertBadge(alertType: string) {
   switch (alertType) {
     case "Critical Return Rate":
-      return <Badge variant="destructive">Critical Return Rate</Badge>
+      return <Badge tone="critical">Critical Return Rate</Badge>
     case "High Return Rate":
-      return (
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-          High Return Rate
-        </Badge>
-      )
+      return <Badge tone="warning">High Return Rate</Badge>
     case "Moderate Return Rate":
-      return (
-        <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-          Moderate Return Rate
-        </Badge>
-      )
+      return <Badge tone="attention">Moderate Return Rate</Badge>
     case "Low Return Rate":
-      return (
-        <Badge variant="outline" className="bg-green-100 text-green-800">
-          Low Return Rate
-        </Badge>
-      )
+      return <Badge tone="success">Low Return Rate</Badge>
     default:
-      return <Badge variant="outline">{alertType}</Badge>
+      return <Badge>{alertType}</Badge>
   }
 }
 
 function getPriorityBadge(priority: string) {
   switch (priority) {
     case "Critical":
-      return <Badge variant="destructive">Critical</Badge>
+      return <Badge tone="critical">Critical</Badge>
     case "High":
-      return <Badge variant="secondary">High</Badge>
+      return <Badge tone="warning">High</Badge>
     case "Medium":
-      return <Badge variant="outline">Medium</Badge>
+      return <Badge tone="attention">Medium</Badge>
     case "Low":
-      return <Badge variant="outline">Low</Badge>
+      return <Badge tone="info">Low</Badge>
     default:
-      return <Badge variant="outline">{priority}</Badge>
+      return <Badge>{priority}</Badge>
   }
 }
 
@@ -264,169 +265,314 @@ function getResolutionStatusBadge(status: string) {
   switch (status) {
     case "Under Investigation":
     case "Supplier Investigation":
-      return <Badge variant="destructive">{status}</Badge>
+      return <Badge tone="critical">{status}</Badge>
     case "Quality Review":
     case "Design Review":
     case "Engineering Analysis":
     case "Supplier Audit":
-      return (
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-          {status}
-        </Badge>
-      )
+      return <Badge tone="warning">{status}</Badge>
     case "Firmware Update":
     case "Software Patch":
-      return (
-        <Badge variant="outline" className="bg-blue-100 text-blue-800">
-          {status}
-        </Badge>
-      )
+      return <Badge tone="info">{status}</Badge>
     default:
-      return <Badge variant="outline">{status}</Badge>
+      return <Badge>{status}</Badge>
   }
 }
 
 export default function MetaVRReturnsRMATable() {
+  const navigate = useNavigate()
+  const [searchValue, setSearchValue] = useState("")
+  const [popoverActive, setPopoverActive] = useState<{[key: number]: boolean}>({})
+
   const criticalAlerts = returnsRMAData.filter((item) => item.priority === "Critical").length
   const totalCost = returnsRMAData.reduce((sum, item) => sum + item.estimatedCost, 0)
   const totalReturns = returnsRMAData.reduce((sum, item) => sum + item.returnQuantity, 0)
   const avgReturnRate = returnsRMAData.reduce((sum, item) => sum + item.returnRate, 0) / returnsRMAData.length
 
+  // Filter data based on search
+  const filteredData = returnsRMAData.filter(
+    (item) =>
+      item.rmaNumber.toLowerCase().includes(searchValue.toLowerCase()) ||
+      item.productModel.toLowerCase().includes(searchValue.toLowerCase()) ||
+      item.returnReason.toLowerCase().includes(searchValue.toLowerCase()) ||
+      item.sku.toLowerCase().includes(searchValue.toLowerCase())
+  )
+
+  const handleSearchChange = useCallback((value: string) => setSearchValue(value), [])
+
+  const togglePopover = useCallback((index: number) => {
+    setPopoverActive((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }))
+  }, [])
+
+  const handleAction = useCallback(
+    (action: string, item: ReturnsRMAData, index: number) => {
+      console.log(`Action: ${action} for RMA:`, item.rmaNumber)
+      switch (action) {
+        case "view":
+          navigate(`/inv/returns-rma/${encodeURIComponent(item.rmaNumber)}-${encodeURIComponent(item.sku)}-${index}`)
+          break
+        default:
+          break
+      }
+    },
+    [navigate]
+  )
+
+  const resourceName = {
+    singular: "RMA",
+    plural: "RMAs",
+  }
+
+  const resourceStateData = filteredData.map((item) => ({ ...item, id: item.rmaNumber }))
+  const { selectedResources, allResourcesSelected, handleSelectionChange } = useIndexResourceState(resourceStateData)
+
+  const rowMarkup = filteredData.map((item, index) => (
+    <IndexTable.Row
+      id={item.rmaNumber}
+      key={item.rmaNumber}
+      selected={selectedResources.includes(item.rmaNumber)}
+      position={index}
+      onClick={() =>
+        navigate(`/inv/returns-rma/${encodeURIComponent(item.rmaNumber)}-${encodeURIComponent(item.sku)}-${index}`)
+      }
+    >
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="semibold" as="span">
+            {item.rmaNumber}
+          </Text>
+          <Text variant="bodySm" tone="subdued" as="span">
+            {item.customerType}
+          </Text>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="medium" as="span">
+            {item.productModel}
+          </Text>
+          <Box background="bg-surface-secondary" padding="050" borderRadius="100" as="span">
+            <Text variant="bodySm" fontWeight="medium" as="span" tone="subdued">
+              {item.sku}
+            </Text>
+          </Box>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="medium" as="span">
+            {item.returnReason}
+          </Text>
+          <Text variant="bodySm" tone="subdued" as="span">
+            {item.defectCategory}
+          </Text>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <InlineStack gap="100" blockAlign="center">
+            <Text variant="bodyMd" fontWeight="bold" tone="critical" as="span">
+              {item.returnRate}%
+            </Text>
+            <div style={{ width: '16px', height: '16px' }}>
+              <ChartVerticalIcon />
+            </div>
+          </InlineStack>
+          {getAlertBadge(item.alertType)}
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="medium" as="span">
+          {item.returnQuantity.toLocaleString()}
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="medium" as="span">
+          ${(item.estimatedCost / 1000000).toFixed(2)}M
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>{getPriorityBadge(item.priority)}</IndexTable.Cell>
+
+      <IndexTable.Cell>{getResolutionStatusBadge(item.resolutionStatus)}</IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodySm" as="span">
+          {item.dueDate}
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Popover
+          active={popoverActive[index]}
+          activator={
+            <div onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="tertiary"
+                icon="horizontalDots"
+                onClick={() => togglePopover(index)}
+              />
+            </div>
+          }
+          onClose={() => togglePopover(index)}
+        >
+          <ActionList
+            items={[
+              {
+                content: "View RMA Details",
+                onAction: () => {
+                  handleAction("view", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Process Return",
+                onAction: () => {
+                  handleAction("process", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Contact Customer",
+                onAction: () => {
+                  handleAction("contact", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Escalate Issue",
+                onAction: () => {
+                  handleAction("escalate", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Generate Report",
+                onAction: () => {
+                  handleAction("report", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+            ]}
+          />
+        </Popover>
+      </IndexTable.Cell>
+    </IndexTable.Row>
+  ))
+
+  const columnHeadings = [
+    "RMA Number",
+    "Product Model",
+    "Return Reason",
+    "Return Rate",
+    "Quantity",
+    "Cost Impact",
+    "Priority",
+    "Resolution Status",
+    "Due Date",
+    "",
+  ]
+
   return (
-    <div className="w-full space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">META VR Returns & RMA Management</h1>
-          <p className="text-muted-foreground">Monitor product returns, defects, and RMA processing</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">Total Cost Impact</div>
-            <div className="text-xl font-bold">${(totalCost / 1000000).toFixed(1)}M</div>
-          </div>
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">Avg Return Rate</div>
-            <div className="text-xl font-bold text-red-600">{avgReturnRate.toFixed(1)}%</div>
-          </div>
-        </div>
-      </div>
+    <Page
+      fullWidth
+      title="META VR Returns & RMA Management"
+      subtitle="Monitor product returns, defects, and RMA processing"
+      primaryAction={{
+        content: `Total Cost: $${(totalCost / 1000000).toFixed(1)}M`,
+        disabled: true,
+      }}
+      secondaryActions={[
+        {
+          content: `Avg Return Rate: ${avgReturnRate.toFixed(1)}%`,
+          disabled: true,
+        },
+      ]}
+    >
+      <Layout>
+        {/* Alert Summary */}
+        <Layout.Section>
+          <Banner title="Active RMA Alerts" tone="warning" icon={AlertTriangleIcon}>
+            <InlineStack gap="400">
+              <LegacyStack spacing="tight">
+                <Text variant="bodyMd" as="span">
+                  Active RMAs:
+                </Text>
+                <Badge tone="attention">{returnsRMAData.length.toString()}</Badge>
+              </LegacyStack>
+              <LegacyStack spacing="tight">
+                <Text variant="bodyMd" as="span">
+                  Critical Issues:
+                </Text>
+                <Badge tone="critical">{criticalAlerts.toString()}</Badge>
+              </LegacyStack>
+              <LegacyStack spacing="tight">
+                <Text variant="bodyMd" as="span">
+                  Total Returns:
+                </Text>
+                <Badge tone="info">{totalReturns.toLocaleString()}</Badge>
+              </LegacyStack>
+              <Text variant="bodySm" as="span">
+                Processing Time: 3-14 days
+              </Text>
+            </InlineStack>
+          </Banner>
+        </Layout.Section>
 
-      {/* Alert Summary */}
-      <div className="flex items-center gap-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-        <AlertTriangle className="h-5 w-5 text-orange-600" />
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-orange-800">Active RMA Alerts</span>
-            <Badge variant="secondary">{returnsRMAData.length}</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-orange-700">Critical Issues</span>
-            <Badge variant="outline" className="bg-red-100 text-red-800">
-              {criticalAlerts}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-orange-700">Total Returns</span>
-            <Badge variant="outline" className="bg-blue-100 text-blue-800">
-              {totalReturns.toLocaleString()}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-orange-600" />
-            <span className="text-sm text-orange-700">Processing Time: 3-14 days</span>
-          </div>
-        </div>
-      </div>
+        {/* Search */}
+        <Layout.Section>
+          <Card>
+            <div style={{ maxWidth: "400px" }}>
+              <TextField
+                value={searchValue}
+                onChange={handleSearchChange}
+                placeholder="Search by RMA, product, defect..."
+                prefix={<Icon source="search" />}
+                clearButton
+                onClearButtonClick={() => setSearchValue("")}
+                autoComplete="off"
+                label=""
+              />
+            </div>
+          </Card>
+        </Layout.Section>
 
-      {/* Search and Filters */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by RMA, product, defect..." className="pl-10" />
-        </div>
-        <Button variant="breadcrumb" size="sm">
-          <Filter className="h-4 w-4 mr-2" />
-          Filter
-        </Button>
-      </div>
+        {/* Data Table */}
+        <Layout.Section>
+          <Card>
+            <IndexTable
+              resourceName={resourceName}
+              itemCount={filteredData.length}
+              selectedItemsCount={allResourcesSelected ? filteredData.length : selectedResources.length}
+              onSelectionChange={handleSelectionChange}
+              headings={
+                columnHeadings.length > 0
+                  ? (columnHeadings.map((heading) => ({ title: heading })) as [ { title: string } & Record<string, unknown>, ...Array<{ title: string } & Record<string, unknown>> ])
+                  : ([{ title: "No columns" }] as [ { title: string } & Record<string, unknown> ])
+              }
+            >
+              {rowMarkup}
+            </IndexTable>
+          </Card>
+        </Layout.Section>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="font-semibold">RMA Number</TableHead>
-              <TableHead className="font-semibold">Product Model</TableHead>
-              <TableHead className="font-semibold">Return Reason</TableHead>
-              <TableHead className="font-semibold">Return Rate</TableHead>
-              <TableHead className="font-semibold">Quantity</TableHead>
-              <TableHead className="font-semibold">Cost Impact</TableHead>
-              <TableHead className="font-semibold">Priority</TableHead>
-              <TableHead className="font-semibold">Resolution Status</TableHead>
-              <TableHead className="font-semibold">Due Date</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {returnsRMAData.map((item, index) => (
-              <TableRow key={index} className="hover:bg-muted/50 cursor-pointer">
-                <Link
-                  to={`/returns-rma/${encodeURIComponent(item.rmaNumber)}-${encodeURIComponent(item.sku)}-${index}`}
-                  className="contents"
-                >
-                  <TableCell className="font-medium">
-                    <div>
-                      <div className="font-semibold">{item.rmaNumber}</div>
-                      <div className="text-sm text-muted-foreground">{item.customerType}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{item.productModel}</div>
-                      <code className="text-xs bg-muted px-2 py-1 rounded">{item.sku}</code>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{item.returnReason}</div>
-                      <div className="text-sm text-muted-foreground">{item.defectCategory}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-red-600">{item.returnRate}%</span>
-                      <TrendingUp className="h-3 w-3 text-red-500" />
-                    </div>
-                    <div className="text-xs text-muted-foreground">{getAlertBadge(item.alertType)}</div>
-                  </TableCell>
-                  <TableCell className="font-medium">{item.returnQuantity.toLocaleString()}</TableCell>
-                  <TableCell className="font-medium">${(item.estimatedCost / 1000000).toFixed(2)}M</TableCell>
-                  <TableCell>{getPriorityBadge(item.priority)}</TableCell>
-                  <TableCell>{getResolutionStatusBadge(item.resolutionStatus)}</TableCell>
-                  <TableCell className="text-sm">{item.dueDate}</TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="breadcrumb" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View RMA Details</DropdownMenuItem>
-                        <DropdownMenuItem>Process Return</DropdownMenuItem>
-                        <DropdownMenuItem>Contact Customer</DropdownMenuItem>
-                        <DropdownMenuItem>Escalate Issue</DropdownMenuItem>
-                        <DropdownMenuItem>Generate Report</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </Link>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+        {/* Results count */}
+        <Layout.Section>
+          {searchValue && (
+            <Text variant="bodySm" tone="subdued" as="span">
+              Showing {filteredData.length} of {returnsRMAData.length} results
+            </Text>
+          )}
+        </Layout.Section>
+      </Layout>
+    </Page>
   )
 }

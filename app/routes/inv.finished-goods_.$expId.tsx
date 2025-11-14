@@ -140,9 +140,8 @@ function getProductData(slug: string) {
 }
 
 export default function ProductDetailPage() {
-  // Unwrap params using React.use()
   const params = useParams()
-  const slug = params.slug as string
+  const slug = params.expId || ''
   const productData = getProductData(slug)
 
   return <VRProductDashboard productData={productData} />

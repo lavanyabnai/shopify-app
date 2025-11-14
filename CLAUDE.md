@@ -195,6 +195,7 @@ const data = await response.json();
 **Database:**
 - SQLite works for single-instance deployments only
 - For production with multiple instances, migrate to PostgreSQL/MySQL (update `prisma/schema.prisma` datasource)
+- **Neon PostgreSQL:** See [NEON_DATABASE_SETUP.md](NEON_DATABASE_SETUP.md) for configuration guide (pooled vs direct connections)
 - Run `npm run setup` after database changes to generate client and apply migrations
 
 **Build process:**

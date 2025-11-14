@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import { useState } from "react"
 
 import {
   Page,
@@ -13,6 +13,8 @@ import {
   Layout,
   LegacyStack,
   InlineStack,
+  BlockStack,
+  Box,
   Icon,
   Popover,
   ActionList,
@@ -694,6 +696,7 @@ export default function MetaVRAgingDashboard() {
         key={item.id}
         selected={selectedResources.includes(item.id)}
         position={index}
+        tone={expandedItems.includes(item.id) ? "subdued" : undefined}
       >
         <IndexTable.Cell>
           <Button
@@ -830,6 +833,7 @@ export default function MetaVRAgingDashboard() {
 
   return (
     <Page
+      fullWidth
       title="Meta VR Inventory Aging Dashboard"
       subtitle="VR headsets and accessories with aging alerts and tech obsolescence tracking"
       primaryAction={{
@@ -847,54 +851,52 @@ export default function MetaVRAgingDashboard() {
         {/* Search and Filters */}
         <Layout.Section>
           <Card>
-            <div style={{ padding: '16px' }}>
-              <LegacyStack spacing="loose">
-                <div style={{ minWidth: '200px' }}>
-                  <TextField
-                    label=""
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    placeholder="Search VR SKUs..."
-                    autoComplete="off"
-                    prefix={<Icon source={SearchIcon} />}
-                    clearButton
-                    onClearButtonClick={() => setSearchTerm('')}
-                  />
-                </div>
-                
-                <div style={{ minWidth: '150px' }}>
-                  <Select
-                    label="Category"
-                    options={[
-                      { label: 'All Categories', value: 'all' },
-                      ...categories.map((category) => ({
-                        label: category,
-                        value: category,
-                      })),
-                    ]}
-                    value={selectedCategory}
-                    onChange={setSelectedCategory}
-                  />
-                </div>
+            <InlineStack gap="400" wrap={false} blockAlign="end">
+              <Box minWidth="300px">
+                <TextField
+                  label="Search"
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  placeholder="Search VR SKUs..."
+                  autoComplete="off"
+                  prefix={<Icon source={SearchIcon} />}
+                  clearButton
+                  onClearButtonClick={() => setSearchTerm('')}
+                />
+              </Box>
 
-                <div style={{ minWidth: '150px' }}>
-                  <Select
-                    label="Aging Period"
-                    options={[
-                      { label: 'All Periods', value: 'all' },
-                      { label: '0-30 days', value: '0-30 days' },
-                      { label: '31-60 days', value: '31-60 days' },
-                      { label: '61-90 days', value: '61-90 days' },
-                      { label: '91-120 days', value: '91-120 days' },
-                      { label: '121-180 days', value: '121-180 days' },
-                      { label: '180+ days', value: '180+ days' },
-                    ]}
-                    value={selectedAgingBucket}
-                    onChange={setSelectedAgingBucket}
-                  />
-                </div>
-              </LegacyStack>
-            </div>
+              <Box minWidth="200px">
+                <Select
+                  label="Category"
+                  options={[
+                    { label: 'All Categories', value: 'all' },
+                    ...categories.map((category) => ({
+                      label: category,
+                      value: category,
+                    })),
+                  ]}
+                  value={selectedCategory}
+                  onChange={setSelectedCategory}
+                />
+              </Box>
+
+              <Box minWidth="200px">
+                <Select
+                  label="Aging Period"
+                  options={[
+                    { label: 'All Periods', value: 'all' },
+                    { label: '0-30 days', value: '0-30 days' },
+                    { label: '31-60 days', value: '31-60 days' },
+                    { label: '61-90 days', value: '61-90 days' },
+                    { label: '91-120 days', value: '91-120 days' },
+                    { label: '121-180 days', value: '121-180 days' },
+                    { label: '180+ days', value: '180+ days' },
+                  ]}
+                  value={selectedAgingBucket}
+                  onChange={setSelectedAgingBucket}
+                />
+              </Box>
+            </InlineStack>
           </Card>
         </Layout.Section>
 
@@ -1000,66 +1002,86 @@ export default function MetaVRAgingDashboard() {
           return (
             <Layout.Section key={itemId}>
               <Card>
-                <div style={{ padding: '16px' }}>
-                  <Tabs
-                    selected={selectedTab}
-                    onSelect={(selectedTabIndex) => setSelectedTab(selectedTabIndex)}
-                    tabs={[
-                      {
-                        id: 'kpis',
-                        content: 'VR KPIs',
-                        accessibilityLabel: 'VR KPIs',
-                        panelID: 'kpis-panel',
-                      },
-                      {
-                        id: 'recommendations',
-                        content: 'Recommendations',
-                        accessibilityLabel: 'Recommendations',
-                        panelID: 'recommendations-panel',
-                      },
-                      {
-                        id: 'details',
-                        content: 'Product Details',
-                        accessibilityLabel: 'Product Details',
-                        panelID: 'details-panel',
-                      },
-                    ]}
-                  >
-                    {selectedTab === 0 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                        {item.kpis.map((kpi, index) => (
-                          <Card key={index}>
-                            <div style={{ padding: '16px' }}>
-                              <LegacyStack spacing="tight" vertical>
-                                <LegacyStack spacing="tight">
-                                  <Text variant="bodySm" tone="subdued" as="span">{kpi.name}</Text>
-                                  {getTrendIcon(kpi.trend)}
-                                </LegacyStack>
-                                <Text variant="headingMd" as="p">{kpi.value}</Text>
-                                {kpi.target && (
-                                  <div>
-                                    <Text variant="bodySm" tone="subdued" as="p">
-                                      Target: {kpi.target} {kpi.unit || ""}
-                                    </Text>
-                                    <ProgressBar
-                                      progress={
-                                        typeof kpi.value === "number"
-                                          ? (kpi.value / (kpi.target as number)) * 100
-                                          : 0
-                                      }
-                                      size="small"
-                                    />
-                                  </div>
-                                )}
-                              </LegacyStack>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
+                <Box padding="400">
+                  <BlockStack gap="400">
+                    <InlineStack align="space-between">
+                      <Text variant="headingMd" as="h3">
+                        {item.sku} - {item.description}
+                      </Text>
+                      <Button onClick={() => toggleItemExpanded(item.id)} size="slim">
+                        Close Details
+                      </Button>
+                    </InlineStack>
 
-                    {selectedTab === 1 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <Tabs
+                      selected={selectedTab}
+                      onSelect={(selectedTabIndex) => setSelectedTab(selectedTabIndex)}
+                      tabs={[
+                        {
+                          id: 'kpis',
+                          content: 'VR KPIs',
+                          accessibilityLabel: 'VR KPIs',
+                          panelID: 'kpis-panel',
+                        },
+                        {
+                          id: 'recommendations',
+                          content: 'Recommendations',
+                          accessibilityLabel: 'Recommendations',
+                          panelID: 'recommendations-panel',
+                        },
+                        {
+                          id: 'details',
+                          content: 'Product Details',
+                          accessibilityLabel: 'Product Details',
+                          panelID: 'details-panel',
+                        },
+                      ]}
+                    >
+                      <Box paddingBlockStart="400">
+                        {selectedTab === 0 && (
+                          <Layout>
+                            {item.kpis.map((kpi, index) => (
+                              <Layout.Section key={index} variant={index < 2 ? "oneHalf" : "oneThird"}>
+                                <Card background="bg-surface-secondary">
+                                  <BlockStack gap="200">
+                                    <InlineStack align="space-between">
+                                      <Text variant="bodySm" tone="subdued" as="span">
+                                        {kpi.name}
+                                      </Text>
+                                      {getTrendIcon(kpi.trend)}
+                                    </InlineStack>
+                                    <Text variant="heading2xl" as="p" fontWeight="bold">
+                                      {kpi.value}
+                                    </Text>
+                                    {kpi.target && (
+                                      <BlockStack gap="100">
+                                        <Text variant="bodySm" tone="subdued" as="p">
+                                          Target: {kpi.target} {kpi.unit || ""}
+                                        </Text>
+                                        <ProgressBar
+                                          progress={
+                                            typeof kpi.value === "number"
+                                              ? Math.min((kpi.value / (kpi.target as number)) * 100, 100)
+                                              : 0
+                                          }
+                                          size="small"
+                                          tone={
+                                            typeof kpi.value === "number" && kpi.value >= (kpi.target as number)
+                                              ? "success"
+                                              : "critical"
+                                          }
+                                        />
+                                      </BlockStack>
+                                    )}
+                                  </BlockStack>
+                                </Card>
+                              </Layout.Section>
+                            ))}
+                          </Layout>
+                        )}
+
+                        {selectedTab === 1 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                         {item.recommendations.map((rec) => (
                           <Card key={rec.id}>
                             <div style={{ padding: '16px' }}>
@@ -1085,12 +1107,12 @@ export default function MetaVRAgingDashboard() {
                               </LegacyStack>
                             </div>
                           </Card>
-                        ))}
-                      </div>
-                    )}
+                            ))}
+                          </div>
+                        )}
 
-                    {selectedTab === 2 && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                        {selectedTab === 2 && (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                         <Card>
                           <div style={{ padding: '16px' }}>
                             <Text variant="headingSm" as="h4">Product Information</Text>
@@ -1159,10 +1181,12 @@ export default function MetaVRAgingDashboard() {
                             </LegacyStack>
                           </div>
                         </Card>
-                      </div>
-                    )}
-                  </Tabs>
-                </div>
+                          </div>
+                        )}
+                      </Box>
+                    </Tabs>
+                  </BlockStack>
+                </Box>
               </Card>
             </Layout.Section>
           )

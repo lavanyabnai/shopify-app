@@ -1,7 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 
-const db = new PrismaClient();
-
 import { calculateDEFCON } from "./app/services/defcon-calculator.server.js";
 import { calculateRevenueRisk } from "./app/services/revenue-risk.server.js";
 import { detectVelocityAnomalies } from "./app/services/velocity-detector.server.js";
@@ -12,6 +10,8 @@ import { evaluateAlertRules, createDefaultAlertRules } from "./app/services/aler
 import { runSimulation } from "./app/services/simulation-engine.server.js";
 import { generateROIReport } from "./app/services/roi-tracker.server.js";
 import { generateAttributionReport } from "./app/services/attribution-engine.server.js";
+
+const db = new PrismaClient();
 
 const TEST_SHOP = "test-shop.myshopify.com";
 
