@@ -33,4 +33,12 @@ export default {
   coverageReporters: ['text', 'lcov', 'html'],
   testTimeout: 30000, // 30 seconds for database operations
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  modulePathIgnorePatterns: [
+    '<rootDir>/analytics_service/',
+    '<rootDir>/node_modules/',
+  ],
+  testPathIgnorePatterns: [
+    '<rootDir>/analytics_service/',
+    '<rootDir>/node_modules/',
+  ],
 };

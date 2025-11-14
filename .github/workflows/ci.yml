@@ -16,3 +16,18 @@ jobs:
           node-version: ${{ matrix.version }}
       - name: Install
         run: yarn install
+      - name: Setup Database
+        run: |
+          yarn setup
+        env:
+          DATABASE_URL: file:./test.db
+      - name: Lint
+        run: yarn lint
+      - name: Build
+        run: yarn build
+        env:
+          DATABASE_URL: file:./test.db
+      - name: Test
+        run: yarn test
+        env:
+          DATABASE_URL: file:./test.db

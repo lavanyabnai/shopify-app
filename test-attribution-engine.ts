@@ -13,8 +13,6 @@
 
 import { PrismaClient } from "@prisma/client";
 
-const db = new PrismaClient();
-
 import {
   logDecision,
   updateDecisionOutcome,
@@ -26,6 +24,8 @@ import {
   getContinuousImprovementMetrics,
   generateAttributionReport,
 } from "./app/services/attribution-engine.server.js";
+
+const db = new PrismaClient();
 
 const TEST_SHOP = "test-shop.myshopify.com";
 

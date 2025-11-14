@@ -13,7 +13,9 @@ import {
   ActionList,
   Box,
   LegacyStack,
-  Layout
+  Layout,
+  IndexTable,
+  useIndexResourceState
 } from '@shopify/polaris'
 import {
   AlertTriangleIcon
@@ -213,7 +215,6 @@ function getSalesVelocityIcon(velocity: string) {
 export default function MetaVRFinishedGoodsTable() {
   const params = useParams()
   const navigate = useNavigate()
-  const workspaceId = params.workspaceId as string
   
   const [searchValue, setSearchValue] = useState('')
   const [popoverActive, setPopoverActive] = useState<{[key: number]: boolean}>({})
@@ -244,136 +245,179 @@ export default function MetaVRFinishedGoodsTable() {
     console.log(`Action: ${action} for item:`, item.sku)
     switch (action) {
       case 'view':
-        navigate(`/workspaces/${workspaceId}/inventory/${item.sku}`)
+        navigate(`/inv/finished-goods/${item.sku}`)
         break
       case 'adjust':
-        navigate(`/workspaces/${workspaceId}/forecast/${item.sku}`)
+        navigate(`/inv/finished-goods/${item.sku}`)
         break
       case 'schedule':
-        navigate(`/workspaces/${workspaceId}/shipments/new?sku=${item.sku}`)
+        navigate(`/inv/finished-goods/${item.sku}`)
         break
       default:
         break
     }
-  }, [navigate, workspaceId])
+  }, [navigate])
 
-  const rows = filteredData.map((item, index) => [
-    <LegacyStack vertical spacing="extraTight" key={`location-${index}`}>
-      <Text variant="bodyMd" fontWeight="semibold" as="span">
-        {item.distributionCenter.split(" (")[0]}
-      </Text>
-      <Text variant="bodySm" tone="subdued" as="span">
-        {item.region}
-      </Text>
-    </LegacyStack>,
-    
-    <Text variant="bodyMd" fontWeight="medium" as="span">
-      {item.productModel}
-    </Text>,
-    
-    <Box
-      background="bg-surface-secondary"
-      padding="100"
-      borderRadius="100"
-      as="span"
+  const resourceName = {
+    singular: 'finished good',
+    plural: 'finished goods',
+  }
+
+  const resourceStateData = filteredData.map(item => ({ ...item, id: item.sku }))
+  const { selectedResources, allResourcesSelected, handleSelectionChange } = useIndexResourceState(resourceStateData)
+
+  const rowMarkup = filteredData.map((item, index) => (
+    <IndexTable.Row
+      id={item.sku}
+      key={item.sku}
+      selected={selectedResources.includes(item.sku)}
+      position={index}
+      onClick={() => navigate(`/inv/finished-goods/${item.sku}`)}
     >
-      <Text variant="bodyMd" fontWeight="medium" as="span" tone="subdued">
-        {item.sku}
-      </Text>
-    </Box>,
-    
-    <Text variant="bodyMd" fontWeight="medium" as="span">
-      {item.currentStock.toLocaleString()} units
-    </Text>,
-    
-    <LegacyStack vertical spacing="extraTight">
-      <LegacyStack spacing="extraTight">
-        <Text variant="bodySm" tone="subdued" as="span">Forecast:</Text>
-        <Text variant="bodySm" fontWeight="medium" as="span">
-          {item.forecastDemand.toLocaleString()}
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="semibold" as="span">
+            {item.distributionCenter.split(" (")[0]}
+          </Text>
+          <Text variant="bodySm" tone="subdued" as="span">
+            {item.region}
+          </Text>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="medium" as="span">
+          {item.productModel}
         </Text>
-      </LegacyStack>
-      <Text variant="bodySm" tone="subdued" as="span">
-        {item.currentStock > item.forecastDemand ? "Surplus" : "Deficit"}:{" "}
-        {Math.abs(item.currentStock - item.forecastDemand).toLocaleString()}
-      </Text>
-    </LegacyStack>,
-    
-    getAlertBadge(item.alertType, item.priority),
-    
-    <LegacyStack vertical spacing="extraTight">
-      <Text variant="bodyMd" fontWeight="medium" as="span">
-        {item.daysOfInventory} days
-      </Text>
-      <Text variant="bodySm" tone="subdued" as="span">
-        {item.daysOfInventory < 20
-          ? "Low coverage"
-          : item.daysOfInventory > 50
-            ? "High coverage"
-            : "Good coverage"}
-      </Text>
-    </LegacyStack>,
-    
-    <Text variant="bodyMd" as="span">{item.retailPartner}</Text>,
-    
-    getSalesVelocityIcon(item.salesVelocity),
-    
-    <Text variant="bodySm" as="span">{item.nextShipment}</Text>,
-    
-    <Text variant="bodyMd" fontWeight="medium" as="span">{item.retailPrice}</Text>,
-    
-    <Popover
-      active={popoverActive[index]}
-      activator={
-        <Button
-          variant="tertiary"
-          icon="horizontalDots"
-          onClick={() => togglePopover(index)}
-        />
-      }
-      onClose={() => togglePopover(index)}
-    >
-      <ActionList
-        items={[
-          { 
-            content: 'View Inventory Details', 
-            onAction: () => {
-              handleAction('view', item)
-              setPopoverActive(prev => ({ ...prev, [index]: false }))
-            }
-          },
-          { 
-            content: 'Adjust Forecast', 
-            onAction: () => {
-              handleAction('adjust', item)
-              setPopoverActive(prev => ({ ...prev, [index]: false }))
-            }
-          },
-          { 
-            content: 'Schedule Shipment', 
-            onAction: () => {
-              handleAction('schedule', item)
-              setPopoverActive(prev => ({ ...prev, [index]: false }))
-            }
-          },
-          { 
-            content: 'Contact Retail Partner', 
-            onAction: () => {
-              handleAction('contact', item)
-              setPopoverActive(prev => ({ ...prev, [index]: false }))
-            }
-          },
-          { 
-            content: 'Generate Sales Report', 
-            onAction: () => {
-              handleAction('report', item)
-              setPopoverActive(prev => ({ ...prev, [index]: false }))
-            }
-          },
-        ]}
-      />
-    </Popover>
-  ])
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Box
+          background="bg-surface-secondary"
+          padding="100"
+          borderRadius="100"
+          as="span"
+        >
+          <Text variant="bodyMd" fontWeight="medium" as="span" tone="subdued">
+            {item.sku}
+          </Text>
+        </Box>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="medium" as="span">
+          {item.currentStock.toLocaleString()} units
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <LegacyStack spacing="extraTight">
+            <Text variant="bodySm" tone="subdued" as="span">Forecast:</Text>
+            <Text variant="bodySm" fontWeight="medium" as="span">
+              {item.forecastDemand.toLocaleString()}
+            </Text>
+          </LegacyStack>
+          <Text variant="bodySm" tone="subdued" as="span">
+            {item.currentStock > item.forecastDemand ? "Surplus" : "Deficit"}:{" "}
+            {Math.abs(item.currentStock - item.forecastDemand).toLocaleString()}
+          </Text>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        {getAlertBadge(item.alertType, item.priority)}
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="medium" as="span">
+            {item.daysOfInventory} days
+          </Text>
+          <Text variant="bodySm" tone="subdued" as="span">
+            {item.daysOfInventory < 20
+              ? "Low coverage"
+              : item.daysOfInventory > 50
+                ? "High coverage"
+                : "Good coverage"}
+          </Text>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" as="span">{item.retailPartner}</Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        {getSalesVelocityIcon(item.salesVelocity)}
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodySm" as="span">{item.nextShipment}</Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="medium" as="span">{item.retailPrice}</Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Popover
+          active={popoverActive[index]}
+          activator={
+            <Button
+              variant="tertiary"
+              icon="horizontalDots"
+              onClick={(e) => {
+                e.stopPropagation()
+                togglePopover(index)
+              }}
+            />
+          }
+          onClose={() => togglePopover(index)}
+        >
+          <ActionList
+            items={[
+              {
+                content: 'View Inventory Details',
+                onAction: () => {
+                  handleAction('view', item)
+                  setPopoverActive(prev => ({ ...prev, [index]: false }))
+                }
+              },
+              {
+                content: 'Adjust Forecast',
+                onAction: () => {
+                  handleAction('adjust', item)
+                  setPopoverActive(prev => ({ ...prev, [index]: false }))
+                }
+              },
+              {
+                content: 'Schedule Shipment',
+                onAction: () => {
+                  handleAction('schedule', item)
+                  setPopoverActive(prev => ({ ...prev, [index]: false }))
+                }
+              },
+              {
+                content: 'Contact Retail Partner',
+                onAction: () => {
+                  handleAction('contact', item)
+                  setPopoverActive(prev => ({ ...prev, [index]: false }))
+                }
+              },
+              {
+                content: 'Generate Sales Report',
+                onAction: () => {
+                  handleAction('report', item)
+                  setPopoverActive(prev => ({ ...prev, [index]: false }))
+                }
+              },
+            ]}
+          />
+        </Popover>
+      </IndexTable.Cell>
+    </IndexTable.Row>
+  ))
 
   const columnHeadings = [
     'Distribution Center',
@@ -392,6 +436,7 @@ export default function MetaVRFinishedGoodsTable() {
 
   return (
     <Page
+      fullWidth
       title="META VR Finished Goods Inventory"
       subtitle="Monitor VR headset distribution and retail inventory levels"
       primaryAction={{
@@ -447,25 +492,17 @@ export default function MetaVRFinishedGoodsTable() {
         <Layout.Section>
           {/* Data Table */}
           <Card>
-            <DataTable
-              columnContentTypes={[
-                'text',
-                'text',
-                'text',
-                'numeric',
-                'text',
-                'text',
-                'text',
-                'text',
-                'text',
-                'text',
-                'numeric',
-                'text'
-              ]}
-              headings={columnHeadings}
-              rows={rows}
-              hoverable
-            />
+            <IndexTable
+              resourceName={resourceName}
+              itemCount={filteredData.length}
+              selectedItemsCount={
+                allResourcesSelected ? 'All' : selectedResources.length
+              }
+              onSelectionChange={handleSelectionChange}
+              headings={columnHeadings.map(heading => ({ title: heading }))}
+            >
+              {rowMarkup}
+            </IndexTable>
           </Card>
         </Layout.Section>
 

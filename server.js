@@ -33,7 +33,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log(`  🌐 Dashboard URL: http://localhost:${PORT}/app/war-room`);
   console.log('');
-  console.log('  📊 All Dashboards:`);
+  console.log('  📊 All Dashboards:');
   console.log(`     • Main:        http://localhost:${PORT}/app/war-room`);
   console.log(`     • Alerts:      http://localhost:${PORT}/app/war-room/alerts`);
   console.log(`     • Actions:     http://localhost:${PORT}/app/war-room/actions`);

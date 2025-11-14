@@ -8,7 +8,6 @@ import {
   EmptyState,
   Spinner,
   Pagination,
-  MenuGroupDescriptor,
   ActionListSection,
   ButtonGroup,
   Popover,
@@ -20,9 +19,11 @@ import {
   RangeSlider,
   useBreakpoints,
 } from '@shopify/polaris';
-import type {IndexFiltersProps, TabProps} from '@shopify/polaris';
+import type {IndexFiltersProps, TabProps,
+  MenuGroupDescriptor} from '@shopify/polaris';
 import React, { useState, useCallback, useMemo } from 'react';
-import { json, LoaderFunctionArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from '@remix-run/node';
+import { json } from '@remix-run/node';
 import { useNavigate, useLoaderData } from '@remix-run/react';
 import { authenticate } from '../shopify.server';
 

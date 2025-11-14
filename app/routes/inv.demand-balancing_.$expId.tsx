@@ -1,3 +1,4 @@
+import { useParams } from "@remix-run/react";
 import DemandBalancingDashboard from "../components/controlKpi/demand/demand-balancing-dashboard"
 
 function getDemandBalancingData(slug: string) {
@@ -138,10 +139,10 @@ function getDemandBalancingData(slug: string) {
   )
 }
 
-export default async function DemandBalancingDetailPage({ params }: { params: Promise<{ slug: string }> }) {
-  const resolvedParams = await params
-  const { slug } = resolvedParams
-  const demandData = getDemandBalancingData(slug)
+export default function DemandBalancingDetailPage() {
+  const params = useParams();
+  const slug = params.expId || '';
+  const demandData = getDemandBalancingData(slug);
 
-  return <DemandBalancingDashboard demandData={demandData} />
+  return <DemandBalancingDashboard demandData={demandData} />;
 }

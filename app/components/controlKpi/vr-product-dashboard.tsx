@@ -1,33 +1,31 @@
-
-import {
-  ArrowLeft,
-  Package,
-  TrendingUp,
-  AlertTriangle,
-  Calendar,
-  MapPin,
-  DollarSign,
-  Users,
-  Truck,
-  BarChart3,
-} from "lucide-react"
-import { Badge } from "../ui/badge"
-import { Button } from "../ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card"
-
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
-import { Link, useParams } from "@remix-run/react"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../ui/dialog"
 import { useState } from "react"
-
+import {
+  Page,
+  Layout,
+  Card,
+  Badge,
+  Text,
+  InlineStack,
+  BlockStack,
+  Box,
+  Button,
+  Tabs,
+  ProgressBar,
+  Modal,
+  FormLayout,
+  TextField,
+  Select,
+  Banner,
+} from "@shopify/polaris"
+import {
+  PackageIcon,
+  ChartVerticalIcon,
+  CalendarIcon,
+  CashDollarIcon,
+  DeliveryIcon,
+  PersonIcon,
+  AlertTriangleIcon,
+} from "@shopify/polaris-icons"
 
 interface ProductData {
   distributionCenter: string
@@ -53,8 +51,13 @@ interface VRProductDashboardProps {
 export default function VRProductDashboard({ productData }: VRProductDashboardProps) {
   const stockPercentage = (productData.currentStock / productData.forecastDemand) * 100
   const isLowStock = productData.priority === "high" || productData.priority === "critical"
-  const params = useParams()
-  const workspaceId = params.workspaceId as string
+
+  const [selectedTab, setSelectedTab] = useState(0)
+  const [isExpediteModalActive, setIsExpediteModalActive] = useState(false)
+  const [isContactModalActive, setIsContactModalActive] = useState(false)
+  const [isForecastModalActive, setIsForecastModalActive] = useState(false)
+  const [isReportModalActive, setIsReportModalActive] = useState(false)
+
   // Mock additional data for dashboard
   const weeklyData = [
     { week: "Week 1", sales: 1200, returns: 45 },
@@ -70,597 +73,852 @@ export default function VRProductDashboard({ productData }: VRProductDashboardPr
     { store: "Best Buy - Sacramento", stock: 190, sales: 43 },
   ]
 
-  const [isExpediteDialogOpen, setIsExpediteDialogOpen] = useState(false)
-  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false)
-  const [isForecastDialogOpen, setIsForecastDialogOpen] = useState(false)
-  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case "critical":
+        return <Badge tone="critical">Critical</Badge>
+      case "high":
+        return <Badge tone="warning">High</Badge>
+      case "low":
+        return <Badge tone="info">Low</Badge>
+      default:
+        return <Badge tone="success">Normal</Badge>
+    }
+  }
+
+  const tabs = [
+    { id: "overview", content: "Overview", panelID: "overview-panel" },
+    { id: "inventory", content: "Inventory Flow", panelID: "inventory-panel" },
+    { id: "retail", content: "Retail Performance", panelID: "retail-panel" },
+    { id: "logistics", content: "Logistics", panelID: "logistics-panel" },
+  ]
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4 mb-4">
-          <Link to={`/workspaces/${workspaceId}/controlKpi/finishGoods`}>
-            <Button variant="breadcrumb" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Inventory
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2">
-            <Badge variant={isLowStock ? "destructive" : "secondary"}>{productData.alertType}</Badge>
-            <span className="text-sm text-muted-foreground">Last updated: 2 hours ago</span>
-          </div>
-        </div>
-
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{productData.productModel}</h1>
-            <p className="text-lg text-gray-600 mt-1">{productData.distributionCenter}</p>
-            <p className="text-sm text-gray-500">
-              SKU: {productData.sku} • {productData.region}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-gray-900">{productData.currentStock.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">Units Available</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock vs Forecast</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stockPercentage.toFixed(2)}%</div>
-              {/* <Progress value={Number(stockPercentage.toFixed(2))} className="mt-2" indicatorColor="bg-blue-500" /> */}
-            <p className="text-xs text-muted-foreground mt-2">
-              {productData.currentStock.toLocaleString()} / {productData.forecastDemand.toLocaleString()} forecasted
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Velocity</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{productData.salesVelocity}</div>
-            <p className="text-xs text-muted-foreground mt-2">vs previous month</p>
-            <div className="text-sm font-medium mt-1">
-              ~{Math.round(productData.currentStock / productData.daysOfInventory)} units/day
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Days of Inventory</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{productData.daysOfInventory}</div>
-            <p className="text-xs text-muted-foreground mt-2">days remaining</p>
-            <div className="text-sm font-medium mt-1">
-              {productData.daysOfInventory < 20 ? "⚠️ Low coverage" : "✅ Good coverage"}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Retail Price</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{productData.retailPrice}</div>
-            <p className="text-xs text-muted-foreground mt-2">Current MSRP</p>
-            <div className="text-sm font-medium mt-1 text-green-600">+2.1% margin</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="inventory">Inventory Flow</TabsTrigger>
-          <TabsTrigger value="retail">Retail Performance</TabsTrigger>
-          <TabsTrigger value="logistics">Logistics</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Inventory Status */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Inventory Trend (Last 30 Days)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64 flex items-end justify-between gap-2 p-4 bg-gray-50 rounded-lg">
-                  {[15200, 14800, 14200, 13800, 13200, 12800, 12450].map((value, index) => (
-                    <div key={index} className="flex flex-col items-center gap-2">
-                      <div
-                        className="bg-blue-500 rounded-t w-8 transition-all hover:bg-blue-600"
-                        style={{ height: `${(value / 15200) * 200}px` }}
-                      />
-                      <span className="text-xs text-gray-500">
-                        {new Date(Date.now() - (6 - index) * 5 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </span>
+    <Page
+      fullWidth
+      title={productData.productModel}
+      subtitle={`${productData.distributionCenter} • SKU: ${productData.sku} • ${productData.region}`}
+      backAction={{ content: "Back to Finished Goods", url: "/inv/finishGoods" }}
+      titleMetadata={
+        <InlineStack gap="200">
+          {getPriorityBadge(productData.priority)}
+          <Badge tone="info">{productData.alertType}</Badge>
+          <Text as="span" variant="bodySm" tone="subdued">
+            Last updated: 2 hours ago
+          </Text>
+        </InlineStack>
+      }
+      primaryAction={{
+        content: `${productData.currentStock.toLocaleString()} Units Available`,
+        disabled: true,
+      }}
+    >
+      <Layout>
+        {/* Key Metrics Grid */}
+        <Layout.Section>
+          <InlineStack gap="400" wrap>
+            <Box minWidth="250px">
+              <Card>
+                <BlockStack gap="200">
+                  <InlineStack align="space-between">
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Stock vs Forecast
+                    </Text>
+                    <div style={{ width: '16px', height: '16px' }}>
+                      <PackageIcon />
                     </div>
-                  ))}
-                </div>
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <span className="text-gray-500">Steady decline due to strong sales</span>
-                  <span className="font-medium">-18% over 30 days</span>
-                </div>
-              </CardContent>
-            </Card>
+                  </InlineStack>
+                  <Text as="h3" variant="headingLg" fontWeight="bold">
+                    {stockPercentage.toFixed(2)}%
+                  </Text>
+                  <ProgressBar progress={Number(stockPercentage.toFixed(2))} size="small" />
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {productData.currentStock.toLocaleString()} / {productData.forecastDemand.toLocaleString()} forecasted
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Box>
 
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Manage this product inventory</CardDescription>
-              </CardHeader>
-          <CardContent className="space-y-3">
-                <Dialog open={isExpediteDialogOpen} onOpenChange={setIsExpediteDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full" variant={isLowStock ? "primary" : "breadcrumb"}>
-                      <Truck className="h-4 w-4 mr-2" />
-                      {isLowStock ? "Expedite Shipment" : "Schedule Shipment"}
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {isLowStock ? "Expedite Emergency Shipment?" : "Schedule Standard Shipment?"}
-                      </DialogTitle>
-                      <DialogDescription>
-                        {isLowStock
-                          ? `Critical stock shortage detected. This will authorize emergency shipment of 3,000 units via air freight. Estimated cost: $45,000. Delivery time: 24-48 hours.`
-                          : `Schedule standard shipment of 2,500 units via ground transport. Estimated cost: $8,500. Delivery time: 5-7 days.`}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Shipment Size</label>
-                          <p className="text-2xl font-bold">{isLowStock ? "3,000" : "2,500"} units</p>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Total Cost</label>
-                          <p className="text-2xl font-bold">{isLowStock ? "$45,000" : "$8,500"}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Delivery Method</label>
-                          <p className="font-medium">{isLowStock ? "Air Freight" : "Ground Transport"}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">ETA</label>
-                          <p className="font-medium">{isLowStock ? "24-48 hours" : "5-7 days"}</p>
-                        </div>
-                      </div>
+            <Box minWidth="250px">
+              <Card>
+                <BlockStack gap="200">
+                  <InlineStack align="space-between">
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Sales Velocity
+                    </Text>
+                    <div style={{ width: '16px', height: '16px' }}>
+                      <ChartVerticalIcon />
                     </div>
-                    <DialogFooter>
-                      <Button variant="breadcrumb" onClick={() => setIsExpediteDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => setIsExpediteDialogOpen(false)}>Confirm Shipment</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  </InlineStack>
+                  <Text as="h3" variant="headingLg" fontWeight="bold" tone="success">
+                    {productData.salesVelocity}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    vs previous month
+                  </Text>
+                  <Text as="p" variant="bodyMd" fontWeight="medium">
+                    ~{Math.round(productData.currentStock / productData.daysOfInventory)} units/day
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Box>
 
-                <Dialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full" variant="breadcrumb">
-                      <Users className="h-4 w-4 mr-2" />
-                      Contact {productData.retailPartner}
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Contact {productData.retailPartner}</DialogTitle>
-                      <DialogDescription>
-                        Send urgent communication regarding inventory levels and restocking requirements.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Message Type</label>
-                        <select className="w-full p-2 border rounded-md">
-                          <option>Inventory Alert</option>
-                          <option>Restock Request</option>
-                          <option>Promotional Opportunity</option>
-                          <option>General Inquiry</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Priority Level</label>
-                        <select className="w-full p-2 border rounded-md">
-                          <option>High - Immediate Response Required</option>
-                          <option>Medium - Response within 24 hours</option>
-                          <option>Low - Response within 3 days</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Contact Method</label>
-                        <div className="flex gap-2">
-                          <Button variant="breadcrumb" size="sm">
-                            Email
-                          </Button>
-                          <Button variant="breadcrumb" size="sm">
-                            Phone
-                          </Button>
-                          <Button variant="breadcrumb" size="sm">
-                            Portal Message
-                          </Button>
-                        </div>
-                      </div>
+            <Box minWidth="250px">
+              <Card>
+                <BlockStack gap="200">
+                  <InlineStack align="space-between">
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Days of Inventory
+                    </Text>
+                    <div style={{ width: '16px', height: '16px' }}>
+                      <CalendarIcon />
                     </div>
-                    <DialogFooter>
-                      <Button variant="breadcrumb" onClick={() => setIsContactDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => setIsContactDialogOpen(false)}>Send Message</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  </InlineStack>
+                  <Text as="h3" variant="headingLg" fontWeight="bold">
+                    {productData.daysOfInventory}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    days remaining
+                  </Text>
+                  <Text as="p" variant="bodyMd" fontWeight="medium">
+                    {productData.daysOfInventory < 20 ? "⚠️ Low coverage" : "✅ Good coverage"}
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Box>
 
-                <Dialog open={isForecastDialogOpen} onOpenChange={setIsForecastDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full" variant="breadcrumb">
-                      <AlertTriangle className="h-4 w-4 mr-2" />
-                      Update Forecast
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Update Demand Forecast</DialogTitle>
-                      <DialogDescription>
-                        Adjust demand projections based on current market conditions and sales trends.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Current Forecast</label>
-                        <p className="text-lg font-semibold">{productData.forecastDemand.toLocaleString()} units</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">New Forecast</label>
-                        <input
-                          type="number"
-                          className="w-full p-2 border rounded-md"
-                          defaultValue={productData.forecastDemand}
-                          placeholder="Enter new forecast"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Adjustment Reason</label>
-                        <select className="w-full p-2 border rounded-md">
-                          <option>Seasonal Demand Change</option>
-                          <option>Market Trend Shift</option>
-                          <option>Promotional Campaign</option>
-                          <option>Competitor Activity</option>
-                          <option>Supply Chain Disruption</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Confidence Level</label>
-                        <select className="w-full p-2 border rounded-md">
-                          <option>High (90-95%)</option>
-                          <option>Medium (75-89%)</option>
-                          <option>Low (60-74%)</option>
-                        </select>
-                      </div>
+            <Box minWidth="250px">
+              <Card>
+                <BlockStack gap="200">
+                  <InlineStack align="space-between">
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Retail Price
+                    </Text>
+                    <div style={{ width: '16px', height: '16px' }}>
+                      <CashDollarIcon />
                     </div>
-                    <DialogFooter>
-                      <Button variant="breadcrumb" onClick={() => setIsForecastDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => setIsForecastDialogOpen(false)}>Update Forecast</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  </InlineStack>
+                  <Text as="h3" variant="headingLg" fontWeight="bold">
+                    {productData.retailPrice}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Current MSRP
+                  </Text>
+                  <Text as="p" variant="bodyMd" fontWeight="medium" tone="success">
+                    +2.1% margin
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Box>
+          </InlineStack>
+        </Layout.Section>
 
-                <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full" variant="breadcrumb">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Generate Report
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Generate Supply Chain Report</DialogTitle>
-                      <DialogDescription>
-                        Create detailed analytics report for this product and distribution center.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Report Type</label>
-                        <select className="w-full p-2 border rounded-md">
-                          <option>Inventory Analysis</option>
-                          <option>Sales Performance</option>
-                          <option>Demand Forecasting</option>
-                          <option>Supply Chain Efficiency</option>
-                          <option>Comprehensive Overview</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Time Period</label>
-                        <select className="w-full p-2 border rounded-md">
-                          <option>Last 7 days</option>
-                          <option>Last 30 days</option>
-                          <option>Last 90 days</option>
-                          <option>Last 6 months</option>
-                          <option>Last 12 months</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Format</label>
-                        <div className="flex gap-2">
-                          <Button variant="breadcrumb" size="sm">
-                            PDF
-                          </Button>
-                          <Button variant="breadcrumb" size="sm">
-                            Excel
-                          </Button>
-                          <Button variant="breadcrumb" size="sm">
-                            CSV
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Recipients</label>
-                        <input
-                          type="email"
-                          className="w-full p-2 border rounded-md"
-                          placeholder="Enter email addresses"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="breadcrumb" onClick={() => setIsReportDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => setIsReportDialogOpen(false)}>Generate & Send</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Activity */}
+        {/* Main Content Tabs */}
+        <Layout.Section>
           <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-3 bg-blue-50 rounded-lg">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                  <div className="flex-1">
-                    <p className="font-medium">Shipment received from manufacturing</p>
-                    <p className="text-sm text-gray-500">2,500 units • {productData.lastShipment}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 p-3 bg-green-50 rounded-lg">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
-                  <div className="flex-1">
-                    <p className="font-medium">Distributed to {productData.retailPartner}</p>
-                    <p className="text-sm text-gray-500">1,200 units • Jan 13, 2025</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 p-3 bg-orange-50 rounded-lg">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full" />
-                  <div className="flex-1">
-                    <p className="font-medium">Low stock alert triggered</p>
-                    <p className="text-sm text-gray-500">Below reorder threshold • Jan 12, 2025</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
+            <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+              <Box padding="400">
+                {selectedTab === 0 && (
+                  <Layout>
+                    {/* Stock Trend Chart */}
+                    <Layout.Section>
+                      <Card>
+                        <BlockStack gap="400">
+                          <InlineStack align="space-between">
+                            <Text variant="headingMd" as="h3">
+                              4-Week Stock & Sales Trend
+                            </Text>
+                            <div style={{ width: '16px', height: '16px' }}>
+                              <ChartVerticalIcon />
+                            </div>
+                          </InlineStack>
+
+                          {/* Chart visualization using stacked bars */}
+                          <BlockStack gap="300">
+                            {weeklyData.map((week, index) => {
+                              const maxSales = Math.max(...weeklyData.map(w => w.sales))
+                              const salesPercentage = (week.sales / maxSales) * 100
+                              const returnPercentage = (week.returns / week.sales) * 100
+
+                              return (
+                                <BlockStack key={index} gap="100">
+                                  <InlineStack align="space-between">
+                                    <Text variant="bodySm" fontWeight="medium" as="span">
+                                      {week.week}
+                                    </Text>
+                                    <InlineStack gap="300">
+                                      <Text variant="bodySm" as="span">
+                                        Sales: {week.sales}
+                                      </Text>
+                                      <Text variant="bodySm" tone="subdued" as="span">
+                                        Returns: {week.returns}
+                                      </Text>
+                                    </InlineStack>
+                                  </InlineStack>
+                                  <ProgressBar
+                                    progress={salesPercentage}
+                                    size="medium"
+                                    tone={salesPercentage > 80 ? "success" : "critical"}
+                                  />
+                                  <Text variant="bodySm" tone="subdued" as="p">
+                                    Return rate: {returnPercentage.toFixed(1)}%
+                                  </Text>
+                                </BlockStack>
+                              )
+                            })}
+                          </BlockStack>
+
+                          <Banner tone="info">
+                            <Text as="p" variant="bodySm">
+                              Average weekly sales: {Math.round(weeklyData.reduce((sum, w) => sum + w.sales, 0) / weeklyData.length).toLocaleString()} units
+                            </Text>
+                          </Banner>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+
+                    {/* Forecast Analysis Chart */}
+                    <Layout.Section>
+                      <Card>
+                        <BlockStack gap="400">
+                          <InlineStack align="space-between">
+                            <Text variant="headingMd" as="h3">
+                              Forecast vs Actual Analysis
+                            </Text>
+                            <div style={{ width: '16px', height: '16px' }}>
+                              <PackageIcon />
+                            </div>
+                          </InlineStack>
+
+                          <BlockStack gap="300">
+                            {/* Current Stock */}
+                            <BlockStack gap="100">
+                              <InlineStack align="space-between">
+                                <Text variant="bodyMd" fontWeight="medium" as="span">
+                                  Current Stock
+                                </Text>
+                                <Text variant="bodyMd" fontWeight="bold" as="span">
+                                  {productData.currentStock.toLocaleString()} units
+                                </Text>
+                              </InlineStack>
+                              <ProgressBar
+                                progress={stockPercentage}
+                                size="medium"
+                                tone={stockPercentage >= 100 ? "success" : "critical"}
+                              />
+                            </BlockStack>
+
+                            {/* Forecast Demand */}
+                            <BlockStack gap="100">
+                              <InlineStack align="space-between">
+                                <Text variant="bodyMd" fontWeight="medium" as="span">
+                                  Forecast Demand
+                                </Text>
+                                <Text variant="bodyMd" fontWeight="bold" as="span">
+                                  {productData.forecastDemand.toLocaleString()} units
+                                </Text>
+                              </InlineStack>
+                              <ProgressBar progress={100} size="medium" tone="success" />
+                            </BlockStack>
+
+                            {/* Gap Analysis */}
+                            <BlockStack gap="100">
+                              <InlineStack align="space-between">
+                                <Text variant="bodyMd" fontWeight="medium" as="span">
+                                  {stockPercentage >= 100 ? "Surplus" : "Deficit"}
+                                </Text>
+                                <Text
+                                  variant="bodyMd"
+                                  fontWeight="bold"
+                                  tone={stockPercentage >= 100 ? "success" : "critical"}
+                                  as="span"
+                                >
+                                  {Math.abs(productData.currentStock - productData.forecastDemand).toLocaleString()} units
+                                </Text>
+                              </InlineStack>
+                              <ProgressBar
+                                progress={Math.min(Math.abs(stockPercentage - 100), 100)}
+                                size="small"
+                                tone={stockPercentage >= 100 ? "success" : "critical"}
+                              />
+                            </BlockStack>
+                          </BlockStack>
+
+                          <Banner tone={stockPercentage >= 100 ? "success" : stockPercentage >= 70 ? "warning" : "critical"}>
+                            <Text as="p" variant="bodySm">
+                              {stockPercentage >= 100
+                                ? `Inventory levels are healthy. You have ${(stockPercentage - 100).toFixed(1)}% surplus stock.`
+                                : stockPercentage >= 70
+                                ? `Stock coverage at ${stockPercentage.toFixed(1)}%. Consider reordering to meet forecast demand.`
+                                : `Critical shortage! Only ${stockPercentage.toFixed(1)}% of forecast demand covered.`
+                              }
+                            </Text>
+                          </Banner>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+
+                    <Layout.Section variant="oneThird">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Quick Actions
+                          </Text>
+                          <Text variant="bodySm" tone="subdued" as="p">
+                            Manage this product inventory
+                          </Text>
+                          <Button
+                            variant={isLowStock ? "primary" : "secondary"}
+                            onClick={() => setIsExpediteModalActive(true)}
+                            icon={DeliveryIcon}
+                          >
+                            {isLowStock ? "Expedite Shipment" : "Schedule Shipment"}
+                          </Button>
+                          <Button onClick={() => setIsContactModalActive(true)} icon={PersonIcon}>
+                            Contact {productData.retailPartner}
+                          </Button>
+                          <Button onClick={() => setIsForecastModalActive(true)} icon={AlertTriangleIcon}>
+                            Update Forecast
+                          </Button>
+                          <Button onClick={() => setIsReportModalActive(true)} icon={ChartVerticalIcon}>
+                            Generate Report
+                          </Button>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+
+                    <Layout.Section>
+                      <Card>
+                        <BlockStack gap="400">
+                          <Text variant="headingMd" as="h3">
+                            Recent Activity
+                          </Text>
+                          <BlockStack gap="300">
+                            <Banner tone="info" title="Shipment received from manufacturing">
+                              <Text as="p" variant="bodyMd">
+                                2,500 units • {productData.lastShipment}
+                              </Text>
+                            </Banner>
+                            <Banner tone="success" title={`Distributed to ${productData.retailPartner}`}>
+                              <Text as="p" variant="bodyMd">
+                                1,200 units • Jan 13, 2025
+                              </Text>
+                            </Banner>
+                            <Banner tone="warning" title="Low stock alert triggered">
+                              <Text as="p" variant="bodyMd">
+                                Below reorder threshold • Jan 12, 2025
+                              </Text>
+                            </Banner>
+                          </BlockStack>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+                  </Layout>
+                )}
+
+                {selectedTab === 1 && (
+                  <Layout>
+                    <Layout.Section variant="oneHalf">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Inbound Shipments
+                          </Text>
+                          <BlockStack gap="200">
+                            <Card background="bg-surface-secondary">
+                              <InlineStack align="space-between">
+                                <BlockStack gap="100">
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    Manufacturing → Distribution Center
+                                  </Text>
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    3,000 units expected
+                                  </Text>
+                                </BlockStack>
+                                <BlockStack gap="100" align="end">
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    {productData.nextShipment}
+                                  </Text>
+                                  <Badge tone="info">In Transit</Badge>
+                                </BlockStack>
+                              </InlineStack>
+                            </Card>
+                            <Card background="bg-surface-secondary">
+                              <InlineStack align="space-between">
+                                <BlockStack gap="100">
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    Emergency Restock
+                                  </Text>
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    1,500 units planned
+                                  </Text>
+                                </BlockStack>
+                                <BlockStack gap="100" align="end">
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    Jan 25, 2025
+                                  </Text>
+                                  <Badge>Scheduled</Badge>
+                                </BlockStack>
+                              </InlineStack>
+                            </Card>
+                          </BlockStack>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+
+                    <Layout.Section variant="oneHalf">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Outbound Distribution
+                          </Text>
+                          <BlockStack gap="200">
+                            {regionalBreakdown.map((store, index) => (
+                              <Card key={index} background="bg-surface-secondary">
+                                <InlineStack align="space-between">
+                                  <BlockStack gap="100">
+                                    <Text variant="bodyMd" fontWeight="medium" as="span">
+                                      {store.store}
+                                    </Text>
+                                    <Text variant="bodySm" tone="subdued" as="span">
+                                      {store.stock} units in stock
+                                    </Text>
+                                  </BlockStack>
+                                  <BlockStack gap="100" align="end">
+                                    <Text variant="bodyMd" fontWeight="medium" as="span">
+                                      {store.sales} sold/week
+                                    </Text>
+                                    <Text variant="bodySm" tone="subdued" as="span">
+                                      {Math.round(store.stock / store.sales)} weeks left
+                                    </Text>
+                                  </BlockStack>
+                                </InlineStack>
+                              </Card>
+                            ))}
+                          </BlockStack>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+                  </Layout>
+                )}
+
+                {selectedTab === 2 && (
+                  <Layout>
+                    <Layout.Section variant="oneHalf">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Weekly Sales Performance
+                          </Text>
+                          <BlockStack gap="200">
+                            {weeklyData.map((week, index) => (
+                              <Card key={index} background="bg-surface-secondary">
+                                <InlineStack align="space-between">
+                                  <BlockStack gap="100">
+                                    <Text variant="bodyMd" fontWeight="medium" as="span">
+                                      {week.week}
+                                    </Text>
+                                    <Text variant="bodySm" tone="subdued" as="span">
+                                      {week.returns} returns
+                                    </Text>
+                                  </BlockStack>
+                                  <BlockStack gap="100" align="end">
+                                    <Text variant="bodyMd" fontWeight="medium" as="span">
+                                      {week.sales} units sold
+                                    </Text>
+                                    <Text variant="bodySm" tone="success" as="span">
+                                      {index > 0
+                                        ? `+${(((week.sales - weeklyData[index - 1].sales) / weeklyData[index - 1].sales) * 100).toFixed(1)}%`
+                                        : "Baseline"}
+                                    </Text>
+                                  </BlockStack>
+                                </InlineStack>
+                              </Card>
+                            ))}
+                          </BlockStack>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+
+                    <Layout.Section variant="oneHalf">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Retail Partner Details
+                          </Text>
+                          <BlockStack gap="200">
+                            <InlineStack gap="300">
+                              <div style={{
+                                width: '48px',
+                                height: '48px',
+                                backgroundColor: '#E3F2FD',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                <PersonIcon />
+                              </div>
+                              <BlockStack gap="050">
+                                <Text variant="bodyMd" fontWeight="medium" as="span">
+                                  {productData.retailPartner}
+                                </Text>
+                                <Text variant="bodySm" tone="subdued" as="span">
+                                  Primary retail partner
+                                </Text>
+                              </BlockStack>
+                            </InlineStack>
+                            <Layout>
+                              <Layout.Section variant="oneHalf">
+                                <BlockStack gap="100">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Contract Terms
+                                  </Text>
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    Net 30
+                                  </Text>
+                                </BlockStack>
+                              </Layout.Section>
+                              <Layout.Section variant="oneHalf">
+                                <BlockStack gap="100">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Margin
+                                  </Text>
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    22%
+                                  </Text>
+                                </BlockStack>
+                              </Layout.Section>
+                            </Layout>
+                            <Layout>
+                              <Layout.Section variant="oneHalf">
+                                <BlockStack gap="100">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Min Order
+                                  </Text>
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    500 units
+                                  </Text>
+                                </BlockStack>
+                              </Layout.Section>
+                              <Layout.Section variant="oneHalf">
+                                <BlockStack gap="100">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Lead Time
+                                  </Text>
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    3-5 days
+                                  </Text>
+                                </BlockStack>
+                              </Layout.Section>
+                            </Layout>
+                          </BlockStack>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+                  </Layout>
+                )}
+
+                {selectedTab === 3 && (
+                  <Layout>
+                    <Layout.Section variant="oneHalf">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Distribution Network
+                          </Text>
+                          <Card background="bg-surface-info">
+                            <BlockStack gap="100">
+                              <Text variant="bodyMd" fontWeight="medium" as="span">
+                                Primary Hub
+                              </Text>
+                              <Text variant="bodyMd" as="span">
+                                {productData.distributionCenter}
+                              </Text>
+                              <Text variant="bodySm" tone="subdued" as="span">
+                                Serves {productData.region}
+                              </Text>
+                            </BlockStack>
+                          </Card>
+                          <Layout>
+                            <Layout.Section variant="oneHalf">
+                              <Card background="bg-surface-secondary">
+                                <BlockStack gap="100">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Avg Shipping Time
+                                  </Text>
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    2.3 days
+                                  </Text>
+                                </BlockStack>
+                              </Card>
+                            </Layout.Section>
+                            <Layout.Section variant="oneHalf">
+                              <Card background="bg-surface-secondary">
+                                <BlockStack gap="100">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Shipping Cost
+                                  </Text>
+                                  <Text variant="bodyMd" fontWeight="medium" as="span">
+                                    $12.50/unit
+                                  </Text>
+                                </BlockStack>
+                              </Card>
+                            </Layout.Section>
+                          </Layout>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+
+                    <Layout.Section variant="oneHalf">
+                      <Card>
+                        <BlockStack gap="300">
+                          <Text variant="headingMd" as="h3">
+                            Transportation Schedule
+                          </Text>
+                          <BlockStack gap="200">
+                            <Banner tone="success" title="Next Delivery">
+                              <BlockStack gap="100">
+                                <Text as="p" variant="bodyMd">
+                                  To retail locations
+                                </Text>
+                                <Text as="p" variant="bodyMd" fontWeight="medium">
+                                  Tomorrow • On Schedule
+                                </Text>
+                              </BlockStack>
+                            </Banner>
+                            <Banner tone="warning" title="Inbound Freight">
+                              <BlockStack gap="100">
+                                <Text as="p" variant="bodyMd">
+                                  From manufacturing
+                                </Text>
+                                <Text as="p" variant="bodyMd" fontWeight="medium">
+                                  {productData.nextShipment} • In Transit
+                                </Text>
+                              </BlockStack>
+                            </Banner>
+                          </BlockStack>
+                        </BlockStack>
+                      </Card>
+                    </Layout.Section>
+                  </Layout>
+                )}
+              </Box>
+            </Tabs>
           </Card>
-        </TabsContent>
+        </Layout.Section>
+      </Layout>
 
-        <TabsContent value="inventory" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Inbound Shipments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Manufacturing → Distribution Center</p>
-                      <p className="text-sm text-gray-500">3,000 units expected</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{productData.nextShipment}</p>
-                      <Badge variant="outline">In Transit</Badge>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">Emergency Restock</p>
-                      <p className="text-sm text-gray-500">1,500 units planned</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">Jan 25, 2025</p>
-                      <Badge variant="secondary">Scheduled</Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Modals */}
+      <Modal
+        open={isExpediteModalActive}
+        onClose={() => setIsExpediteModalActive(false)}
+        title={isLowStock ? "Expedite Emergency Shipment?" : "Schedule Standard Shipment?"}
+        primaryAction={{
+          content: "Confirm Shipment",
+          onAction: () => setIsExpediteModalActive(false),
+        }}
+        secondaryActions={[
+          {
+            content: "Cancel",
+            onAction: () => setIsExpediteModalActive(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <BlockStack gap="400">
+            <Text as="p" variant="bodyMd">
+              {isLowStock
+                ? `Critical stock shortage detected. This will authorize emergency shipment of 3,000 units via air freight. Estimated cost: $45,000. Delivery time: 24-48 hours.`
+                : `Schedule standard shipment of 2,500 units via ground transport. Estimated cost: $8,500. Delivery time: 5-7 days.`}
+            </Text>
+            <Layout>
+              <Layout.Section variant="oneHalf">
+                <BlockStack gap="100">
+                  <Text as="p" variant="bodySm" fontWeight="medium">
+                    Shipment Size
+                  </Text>
+                  <Text as="p" variant="headingMd">
+                    {isLowStock ? "3,000" : "2,500"} units
+                  </Text>
+                </BlockStack>
+              </Layout.Section>
+              <Layout.Section variant="oneHalf">
+                <BlockStack gap="100">
+                  <Text as="p" variant="bodySm" fontWeight="medium">
+                    Total Cost
+                  </Text>
+                  <Text as="p" variant="headingMd">
+                    {isLowStock ? "$45,000" : "$8,500"}
+                  </Text>
+                </BlockStack>
+              </Layout.Section>
+            </Layout>
+            <Layout>
+              <Layout.Section variant="oneHalf">
+                <BlockStack gap="100">
+                  <Text as="p" variant="bodySm" fontWeight="medium">
+                    Delivery Method
+                  </Text>
+                  <Text as="p" variant="bodyMd">
+                    {isLowStock ? "Air Freight" : "Ground Transport"}
+                  </Text>
+                </BlockStack>
+              </Layout.Section>
+              <Layout.Section variant="oneHalf">
+                <BlockStack gap="100">
+                  <Text as="p" variant="bodySm" fontWeight="medium">
+                    ETA
+                  </Text>
+                  <Text as="p" variant="bodyMd">
+                    {isLowStock ? "24-48 hours" : "5-7 days"}
+                  </Text>
+                </BlockStack>
+              </Layout.Section>
+            </Layout>
+          </BlockStack>
+        </Modal.Section>
+      </Modal>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Outbound Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {regionalBreakdown.map((store, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{store.store}</p>
-                        <p className="text-sm text-gray-500">{store.stock} units in stock</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{store.sales} sold/week</p>
-                        <p className="text-sm text-gray-500">{Math.round(store.stock / store.sales)} weeks left</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+      <Modal
+        open={isContactModalActive}
+        onClose={() => setIsContactModalActive(false)}
+        title={`Contact ${productData.retailPartner}`}
+        primaryAction={{
+          content: "Send Message",
+          onAction: () => setIsContactModalActive(false),
+        }}
+        secondaryActions={[
+          {
+            content: "Cancel",
+            onAction: () => setIsContactModalActive(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <FormLayout>
+            <Text as="p" variant="bodyMd">
+              Send urgent communication regarding inventory levels and restocking requirements.
+            </Text>
+            <Select
+              label="Message Type"
+              options={["Inventory Alert", "Restock Request", "Promotional Opportunity", "General Inquiry"]}
+              onChange={() => {}}
+              value=""
+            />
+            <Select
+              label="Priority Level"
+              options={[
+                "High - Immediate Response Required",
+                "Medium - Response within 24 hours",
+                "Low - Response within 3 days",
+              ]}
+              onChange={() => {}}
+              value=""
+            />
+          </FormLayout>
+        </Modal.Section>
+      </Modal>
 
-        <TabsContent value="retail" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Weekly Sales Performance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {weeklyData.map((week, index) => (
-                    <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{week.week}</p>
-                        <p className="text-sm text-gray-500">{week.returns} returns</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{week.sales} units sold</p>
-                        <p className="text-sm text-green-600">
-                          {index > 0
-                            ? `+${(((week.sales - weeklyData[index - 1].sales) / weeklyData[index - 1].sales) * 100).toFixed(1)}%`
-                            : "Baseline"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+      <Modal
+        open={isForecastModalActive}
+        onClose={() => setIsForecastModalActive(false)}
+        title="Update Demand Forecast"
+        primaryAction={{
+          content: "Update Forecast",
+          onAction: () => setIsForecastModalActive(false),
+        }}
+        secondaryActions={[
+          {
+            content: "Cancel",
+            onAction: () => setIsForecastModalActive(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <FormLayout>
+            <Text as="p" variant="bodyMd">
+              Adjust demand projections based on current market conditions and sales trends.
+            </Text>
+            <BlockStack gap="100">
+              <Text as="p" variant="bodySm" fontWeight="medium">
+                Current Forecast
+              </Text>
+              <Text as="p" variant="headingMd">
+                {productData.forecastDemand.toLocaleString()} units
+              </Text>
+            </BlockStack>
+            <TextField
+              label="New Forecast"
+              type="number"
+              value={productData.forecastDemand.toString()}
+              onChange={() => {}}
+              autoComplete="off"
+            />
+            <Select
+              label="Adjustment Reason"
+              options={[
+                "Seasonal Demand Change",
+                "Market Trend Shift",
+                "Promotional Campaign",
+                "Competitor Activity",
+                "Supply Chain Disruption",
+              ]}
+              onChange={() => {}}
+              value=""
+            />
+            <Select
+              label="Confidence Level"
+              options={["High (90-95%)", "Medium (75-89%)", "Low (60-74%)"]}
+              onChange={() => {}}
+              value=""
+            />
+          </FormLayout>
+        </Modal.Section>
+      </Modal>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Retail Partner Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Users className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{productData.retailPartner}</p>
-                    <p className="text-sm text-gray-500">Primary retail partner</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4 pt-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Contract Terms</p>
-                    <p className="font-medium">Net 30</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Margin</p>
-                    <p className="font-medium">22%</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Min Order</p>
-                    <p className="font-medium">500 units</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Lead Time</p>
-                    <p className="font-medium">3-5 days</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="logistics" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Distribution Network
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="font-medium">Primary Hub</p>
-                    <p className="text-sm text-gray-600">{productData.distributionCenter}</p>
-                    <p className="text-sm text-gray-500 mt-1">Serves {productData.region}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-sm text-gray-500">Avg Shipping Time</p>
-                      <p className="font-medium">2.3 days</p>
-                    </div>
-                    <div className="p-3 border rounded-lg">
-                      <p className="text-sm text-gray-500">Shipping Cost</p>
-                      <p className="font-medium">$12.50/unit</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Transportation Schedule</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">Next Delivery</p>
-                      <p className="text-sm text-gray-500">To retail locations</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">Tomorrow</p>
-                      <p className="text-sm text-green-600">On Schedule</p>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg">
-                    <div>
-                      <p className="font-medium">Inbound Freight</p>
-                      <p className="text-sm text-gray-500">From manufacturing</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{productData.nextShipment}</p>
-                      <p className="text-sm text-yellow-600">In Transit</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+      <Modal
+        open={isReportModalActive}
+        onClose={() => setIsReportModalActive(false)}
+        title="Generate Supply Chain Report"
+        primaryAction={{
+          content: "Generate & Send",
+          onAction: () => setIsReportModalActive(false),
+        }}
+        secondaryActions={[
+          {
+            content: "Cancel",
+            onAction: () => setIsReportModalActive(false),
+          },
+        ]}
+      >
+        <Modal.Section>
+          <FormLayout>
+            <Text as="p" variant="bodyMd">
+              Create detailed analytics report for this product and distribution center.
+            </Text>
+            <Select
+              label="Report Type"
+              options={[
+                "Inventory Analysis",
+                "Sales Performance",
+                "Demand Forecasting",
+                "Supply Chain Efficiency",
+                "Comprehensive Overview",
+              ]}
+              onChange={() => {}}
+              value=""
+            />
+            <Select
+              label="Time Period"
+              options={["Last 7 days", "Last 30 days", "Last 90 days", "Last 6 months", "Last 12 months"]}
+              onChange={() => {}}
+              value=""
+            />
+            <TextField label="Recipients" type="email" value="" onChange={() => {}} autoComplete="off" />
+          </FormLayout>
+        </Modal.Section>
+      </Modal>
+    </Page>
   )
 }

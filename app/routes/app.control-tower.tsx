@@ -6,7 +6,8 @@ import {
   Badge,
 } from '@shopify/polaris';
 import React from 'react';
-import { json, LoaderFunctionArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from '@remix-run/node';
+import { json } from '@remix-run/node';
 import { useNavigate } from '@remix-run/react';
 import { authenticate } from '../shopify.server';
 

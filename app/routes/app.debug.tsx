@@ -1,4 +1,5 @@
-import { json, LoaderFunctionArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from '@remix-run/node';
+import { json } from '@remix-run/node';
 import { useLoaderData } from '@remix-run/react';
 import { authenticate } from '../shopify.server';
 import { Page, Card, Text, BlockStack, Badge } from '@shopify/polaris';

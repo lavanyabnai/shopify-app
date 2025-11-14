@@ -1,10 +1,26 @@
-import { Badge } from "../ui/badge"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu"
-import { MoreHorizontal, AlertTriangle, Search, Filter, ArrowLeft } from "lucide-react"
-import { Link, useParams } from "@remix-run/react"
+import { useState, useCallback } from "react"
+import {
+  Page,
+  Layout,
+  Card,
+  Badge,
+  Text,
+  InlineStack,
+  BlockStack,
+  Box,
+  Button,
+  Banner,
+  TextField,
+  Icon,
+  Popover,
+  ActionList,
+  IndexTable,
+  useIndexResourceState,
+  LegacyStack,
+  ProgressBar,
+} from "@shopify/polaris"
+import { AlertTriangleIcon, ChartVerticalIcon } from "@shopify/polaris-icons"
+import { useNavigate } from "@remix-run/react"
 
 interface SupplierAlertsData {
   supplierName: string
@@ -26,6 +42,7 @@ interface SupplierAlertsData {
   qualityRating: number
   onTimeDelivery: number
 }
+
 const supplierAlertsData: SupplierAlertsData[] = [
   {
     supplierName: "Foxconn Technology Group",
@@ -212,34 +229,26 @@ const supplierAlertsData: SupplierAlertsData[] = [
 function getAlertBadge(alertType: string) {
   switch (alertType) {
     case "Critical OOS":
-      return <Badge variant="destructive">Critical OOS</Badge>
+      return <Badge tone="critical">Critical OOS</Badge>
     case "Severe OOS":
-      return (
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-          Severe OOS
-        </Badge>
-      )
+      return <Badge tone="warning">Severe OOS</Badge>
     case "Moderate OOS":
-      return (
-        <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-          Moderate OOS
-        </Badge>
-      )
+      return <Badge tone="attention">Moderate OOS</Badge>
     default:
-      return <Badge variant="outline">{alertType}</Badge>
+      return <Badge>{alertType}</Badge>
   }
 }
 
 function getPriorityBadge(priority: string) {
   switch (priority) {
     case "Critical":
-      return <Badge variant="destructive">Critical</Badge>
+      return <Badge tone="critical">Critical</Badge>
     case "High":
-      return <Badge variant="secondary">High</Badge>
+      return <Badge tone="warning">High</Badge>
     case "Medium":
-      return <Badge variant="outline">Medium</Badge>
+      return <Badge tone="attention">Medium</Badge>
     default:
-      return <Badge variant="outline">{priority}</Badge>
+      return <Badge tone="info">{priority}</Badge>
   }
 }
 
@@ -247,173 +256,298 @@ function getSupplierStatusBadge(status: string) {
   switch (status) {
     case "Production Halt":
     case "Equipment Failure":
-      return <Badge variant="destructive">{status}</Badge>
+      return <Badge tone="critical">{status}</Badge>
     case "Capacity Issues":
     case "Quality Issues":
     case "Supply Chain Disruption":
     case "Workforce Shortage":
-      return (
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-          {status}
-        </Badge>
-      )
+      return <Badge tone="warning">{status}</Badge>
     case "Partial Production":
     case "Raw Material Delay":
-      return (
-        <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-          {status}
-        </Badge>
-      )
+      return <Badge tone="attention">{status}</Badge>
     default:
-      return <Badge variant="outline">{status}</Badge>
+      return <Badge>{status}</Badge>
   }
 }
 
 export default function MetaVRSupplierAlertsTable() {
-  const params = useParams()
-  const workspaceId = params.workspaceId as string
+  const navigate = useNavigate()
+  const [searchValue, setSearchValue] = useState("")
+  const [popoverActive, setPopoverActive] = useState<{[key: number]: boolean}>({})
 
   const criticalAlerts = supplierAlertsData.filter((item) => item.priority === "Critical").length
   const totalImpact = supplierAlertsData.reduce((sum, item) => sum + item.estimatedImpact, 0)
   const avgShortage =
     supplierAlertsData.reduce((sum, item) => sum + item.shortagePercentage, 0) / supplierAlertsData.length
+  const totalAffectedSKUs = supplierAlertsData.reduce((sum, item) => sum + item.affectedSKUs, 0)
+
+  // Filter data based on search
+  const filteredData = supplierAlertsData.filter(
+    (item) =>
+      item.supplierName.toLowerCase().includes(searchValue.toLowerCase()) ||
+      item.componentType.toLowerCase().includes(searchValue.toLowerCase()) ||
+      item.materialCode.toLowerCase().includes(searchValue.toLowerCase()) ||
+      item.supplierCode.toLowerCase().includes(searchValue.toLowerCase())
+  )
+
+  const handleSearchChange = useCallback((value: string) => setSearchValue(value), [])
+
+  const togglePopover = useCallback((index: number) => {
+    setPopoverActive((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }))
+  }, [])
+
+  const handleAction = useCallback(
+    (action: string, item: SupplierAlertsData, index: number) => {
+      console.log(`Action: ${action} for Supplier:`, item.supplierName)
+      switch (action) {
+        case "view":
+          navigate(`/inv/supplier-oos/${encodeURIComponent(item.supplierCode)}-${encodeURIComponent(item.materialCode)}-${index}`)
+          break
+        default:
+          break
+      }
+    },
+    [navigate]
+  )
+
+  const resourceName = {
+    singular: "Supplier Alert",
+    plural: "Supplier Alerts",
+  }
+
+  const resourceStateData = filteredData.map((item) => ({ ...item, id: item.supplierCode }))
+  const { selectedResources, allResourcesSelected, handleSelectionChange } = useIndexResourceState(resourceStateData)
+
+  const rowMarkup = filteredData.map((item, index) => (
+    <IndexTable.Row
+      id={item.supplierCode + index}
+      key={item.supplierCode + index}
+      selected={selectedResources.includes(item.supplierCode + index)}
+      position={index}
+      onClick={() =>
+        navigate(`/inv/supplier-oos/${encodeURIComponent(item.supplierCode)}-${encodeURIComponent(item.materialCode)}-${index}`)
+      }
+    >
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="semibold" as="span">
+            {item.supplierName}
+          </Text>
+          <Text variant="bodySm" tone="subdued" as="span">
+            {item.location}
+          </Text>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <Text variant="bodyMd" fontWeight="medium" as="span">
+            {item.componentType}
+          </Text>
+          <Box background="bg-surface-secondary" padding="050" borderRadius="100" as="span">
+            <Text variant="bodySm" fontWeight="medium" as="span" tone="subdued">
+              {item.materialCode}
+            </Text>
+          </Box>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>{getAlertBadge(item.alertType)}</IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <LegacyStack vertical spacing="extraTight">
+          <InlineStack gap="100" blockAlign="center">
+            <Text variant="bodyMd" fontWeight="bold" tone="critical" as="span">
+              {item.shortagePercentage.toFixed(1)}%
+            </Text>
+            <div style={{ width: '16px', height: '16px' }}>
+              <ChartVerticalIcon />
+            </div>
+          </InlineStack>
+          <div style={{ width: '80px' }}>
+          
+          </div>
+        </LegacyStack>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="bold" as="span">
+          ${(item.estimatedImpact / 1000000).toFixed(2)}M
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>{getSupplierStatusBadge(item.supplierStatus)}</IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodyMd" fontWeight="medium" as="span">
+          {item.estimatedRecovery}
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>{getPriorityBadge(item.priority)}</IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Text variant="bodySm" as="span">
+          {item.dueDate}
+        </Text>
+      </IndexTable.Cell>
+
+      <IndexTable.Cell>
+        <Popover
+          active={popoverActive[index]}
+          activator={
+            <Button
+              variant="tertiary"
+              icon="horizontalDots"
+              onClick={() => {
+                togglePopover(index)
+              }}
+            />
+          }
+          onClose={() => togglePopover(index)}
+        >
+          <ActionList
+            items={[
+              {
+                content: "View Details",
+                onAction: () => {
+                  handleAction("view", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Contact Supplier",
+                onAction: () => {
+                  handleAction("contact", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Escalate Alert",
+                onAction: () => {
+                  handleAction("escalate", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+              {
+                content: "Find Alternatives",
+                onAction: () => {
+                  handleAction("alternatives", item, index)
+                  setPopoverActive((prev) => ({ ...prev, [index]: false }))
+                },
+              },
+            ]}
+          />
+        </Popover>
+      </IndexTable.Cell>
+    </IndexTable.Row>
+  ))
+
+  const columnHeadings = [
+    "Supplier",
+    "Component Type",
+    "Alert Type",
+    "Shortage %",
+    "Estimated Impact",
+    "Supplier Status",
+    "Recovery Time",
+    "Priority",
+    "Due Date",
+    "",
+  ]
 
   return (
-    <div className="w-full space-y-4 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Link to={`/inv/supplyChain`}>
-            <Button variant="breadcrumb" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Supply Chain Control Tower
-            </Button>
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold">META VR Supplier OOS Alerts</h1>
-          <p className="text-muted-foreground">Monitor critical supplier shortages and out-of-stock situations</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">Total Impact</div>
-            <div className="text-xl font-bold">${(totalImpact / 1000000).toFixed(1)}M</div>
-          </div>
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">Avg Shortage</div>
-            <div className="text-xl font-bold text-red-600">{avgShortage.toFixed(1)}%</div>
-          </div>
-        </div>
-      </div>
+    <Page
+      fullWidth
+      title="META VR Supplier OOS Alerts"
+      subtitle="Monitor critical supplier shortages and out-of-stock situations"
+      backAction={{ content: "Back to Control Tower", url: "/inv/control-tower" }}
+      primaryAction={{
+        content: `Total Impact: $${(totalImpact / 1000000).toFixed(1)}M`,
+        disabled: true,
+      }}
+      secondaryActions={[
+        {
+          content: `Avg Shortage: ${avgShortage.toFixed(1)}%`,
+          disabled: true,
+        },
+      ]}
+    >
+      <Layout>
+        {/* Alert Summary */}
+        <Layout.Section>
+          <Banner title="Supplier OOS Alerts" tone="critical" icon={AlertTriangleIcon}>
+            <InlineStack gap="400">
+              <LegacyStack spacing="tight">
+                <Text variant="bodyMd" as="span">
+                  Total Alerts:
+                </Text>
+                <Badge tone="critical">{supplierAlertsData.length.toString()}</Badge>
+                <Text variant="bodyMd" as="span">
+                  Critical:
+                </Text>
+                <Badge tone="critical">{criticalAlerts.toString()}</Badge>
+                <Text variant="bodyMd" as="span">
+                  Affected SKUs:
+                </Text>
+                <Badge tone="warning">{totalAffectedSKUs.toString()}</Badge>
+              </LegacyStack>
+              <Text variant="bodySm" as="span">
+                Immediate action required for critical suppliers
+              </Text>
+            </InlineStack>
+          </Banner>
+        </Layout.Section>
 
-      {/* Alert Summary */}
-      <div className="flex items-center gap-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-        <AlertTriangle className="h-5 w-5 text-red-600" />
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-red-800">Supplier OOS Alerts</span>
-            <Badge variant="destructive">{supplierAlertsData.length}</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-red-700">Critical Alerts</span>
-            <Badge variant="outline" className="bg-red-100 text-red-800">
-              {criticalAlerts}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-red-700">Affected Components</span>
-            <Badge variant="outline" className="bg-orange-100 text-orange-800">
-              {supplierAlertsData.reduce((sum, item) => sum + item.affectedSKUs, 0)}
-            </Badge>
-          </div>
-        </div>
-      </div>
+        {/* Search */}
+        <Layout.Section>
+          <Card>
+            <div style={{ maxWidth: "400px" }}>
+              <TextField
+                value={searchValue}
+                onChange={handleSearchChange}
+                placeholder="Search by supplier, component..."
+                prefix={<Icon source="search" />}
+                clearButton
+                onClearButtonClick={() => setSearchValue("")}
+                autoComplete="off"
+                label=""
+              />
+            </div>
+          </Card>
+        </Layout.Section>
 
-      {/* Search and Filters */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by supplier, component..." className="pl-10" />
-        </div>
-        <Button variant="breadcrumb" size="sm">
-          <Filter className="h-4 w-4 mr-2" />
-          Filter
-        </Button>
-      </div>
+        {/* Data Table */}
+        <Layout.Section>
+          <Card>
+            <IndexTable
+              resourceName={resourceName}
+              itemCount={filteredData.length}
+              selectedItemsCount={allResourcesSelected ? filteredData.length : selectedResources.length}
+              onSelectionChange={handleSelectionChange}
+              headings={
+                columnHeadings.length > 0
+                  ? (columnHeadings.map((heading) => ({ title: heading })) as [ { title: string } & Record<string, unknown>, ...Array<{ title: string } & Record<string, unknown>> ])
+                  : ([{ title: "No columns" }] as [ { title: string } & Record<string, unknown> ])
+              }
+            >
+              {rowMarkup}
+            </IndexTable>
+          </Card>
+        </Layout.Section>
 
-      {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="font-semibold">Supplier</TableHead>
-              <TableHead className="font-semibold">Component Type</TableHead>
-              <TableHead className="font-semibold">Alert Type</TableHead>
-              <TableHead className="font-semibold">Shortage %</TableHead>
-              <TableHead className="font-semibold">Estimated Impact</TableHead>
-              <TableHead className="font-semibold">Supplier Status</TableHead>
-              <TableHead className="font-semibold">Recovery Time</TableHead>
-              <TableHead className="font-semibold">Priority</TableHead>
-              <TableHead className="font-semibold">Due Date</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {supplierAlertsData.map((item, index) => (
-              <TableRow 
-                key={index} 
-                className="hover:bg-muted/50 cursor-pointer"
-                onClick={() => {
-                  window.location.href = `/workspaces/${workspaceId}/controlKpi/supplier-alerts/${encodeURIComponent(item.supplierCode)}-${encodeURIComponent(item.materialCode)}-${index}`
-                }}
-              >
-                <TableCell className="font-medium">
-                  <div>
-                    <div className="font-semibold">{item.supplierName}</div>
-                    <div className="text-sm text-muted-foreground">{item.location}</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <div className="font-medium">{item.componentType}</div>
-                    <code className="text-xs bg-muted px-2 py-1 rounded">{item.materialCode}</code>
-                  </div>
-                </TableCell>
-                <TableCell>{getAlertBadge(item.alertType)}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-red-600">{item.shortagePercentage.toFixed(1)}%</span>
-                    <div className="w-16 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-red-600 h-2 rounded-full"
-                        style={{ width: `${Math.min(item.shortagePercentage, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium">${(item.estimatedImpact / 1000000).toFixed(2)}M</TableCell>
-                <TableCell>{getSupplierStatusBadge(item.supplierStatus)}</TableCell>
-                <TableCell className="font-medium">{item.estimatedRecovery}</TableCell>
-                <TableCell>{getPriorityBadge(item.priority)}</TableCell>
-                <TableCell className="text-sm">{item.dueDate}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="breadcrumb" size="sm">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>View Details</DropdownMenuItem>
-                      <DropdownMenuItem>Contact Supplier</DropdownMenuItem>
-                      <DropdownMenuItem>Escalate Alert</DropdownMenuItem>
-                      <DropdownMenuItem>Find Alternatives</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+        {/* Results count */}
+        <Layout.Section>
+          {searchValue && (
+            <Text variant="bodySm" tone="subdued" as="span">
+              Showing {filteredData.length} of {filteredData.length} results
+            </Text>
+          )}
+        </Layout.Section>
+      </Layout>
+    </Page>
   )
 }

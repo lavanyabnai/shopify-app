@@ -13,8 +13,6 @@
 
 import { PrismaClient } from "@prisma/client";
 
-const db = new PrismaClient();
-
 import {
   calculateROIMetrics,
   getActionImpacts,
@@ -24,6 +22,8 @@ import {
   getROIComparison,
   updateActionImpact,
 } from "./app/services/roi-tracker.server.js";
+
+const db = new PrismaClient();
 
 const TEST_SHOP = "test-shop.myshopify.com";
 
