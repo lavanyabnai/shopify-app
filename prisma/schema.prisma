@@ -513,3 +513,180 @@ model Playbook {
   @@index([shop, scenario, active])
   @@index([scenario, active])
 }
+
+// ============================================================================
+// Order Performance / ATP (Available-to-Promise) Models
+// ============================================================================
+
+model OrderPerformanceAlert {
+  id                String   @id @default(cuid())
+  shop              String
+  orderNumber       String   // Order number (e.g., "1000005046")
+  orderId           String?  // Shopify order ID if available
+
+  // Order details
+  customerCode      String   // Customer/Sold-To code (e.g., "C003")
+  shippingLocation  String   // Shipping location (e.g., "L002")
+  soldToCode        String   // Sold-to code
+
+  // ATP Status
+  atpStatus         String   // "Unconfirmed", "Partially confirmed", "Fully confirmed", "Limited confirmed"
+  lcStatus          String   // LC Status (e.g., "RLSD", "FIXD")
+
+  // Financial metrics
+  revenueAtRisk     Float    // Total revenue at risk
+  penaltyCost       Float    // Penalty cost for delays
+  fillRate          Float    // Current fill rate percentage (0-100)
+
+  // Date information
+  planShipDate      DateTime // Planned ship date
+  currentShipDate   DateTime // Current ship date
+  availDate         DateTime // Availability date
+
+  // Proposal information (for Simulate Alternate Dates)
+  proposedShipDate  DateTime? // Proposed ship date
+  proposedAvailDate DateTime? // Proposed availability date
+  proposedFillRate  Float?    // Proposed fill rate
+  proposedPalletCut Int?      // Proposed pallet cut
+  maxDelay          Int?      // Max delay in days
+  maxPalletCut      Int?      // Max pallet cut
+
+  // Priority and recommendation
+  recommendationText String   // Recommendation text (e.g., "Delay the shipment by 2 Days")
+  priority          String   // "High", "Medium", "Low"
+  urgency           String   // "Critical", "High", "Medium", "Low"
+
+  // Allocation strategy
+  allocationStrategy String  @default("Customer Prioritization") // Allocation strategy used
+
+  // Status tracking
+  status            String   // "Open", "Waiting", "Closed"
+  acknowledged      Boolean  @default(false)
+  acknowledgedBy    String?
+  acknowledgedAt    DateTime?
+  resolvedAt        DateTime?
+
+  // Metadata
+  metadata          String?  // JSON: additional alert data
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  lineItems         OrderPerformanceLineItem[]
+  peggingDetails    OrderPeggingDetail[]
+  alternateProposals AlternateProposal[]
+  learningData      OrderLearningData?
+
+  @@index([shop, status])
+  @@index([shop, atpStatus])
+  @@index([shop, priority])
+  @@index([shop, planShipDate])
+  @@index([orderNumber])
+}
+
+model OrderPerformanceLineItem {
+  id                String   @id @default(cuid())
+  alertId           String
+  alert             OrderPerformanceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  lineNumber        Int      // Line number in order
+  materialCode      String   // Material/SKU code (e.g., "1001")
+  description       String   // Product description
+
+  // Quantities
+  orderQty          Int      // Ordered quantity
+  unconfirmedQty    Int      // Unconfirmed quantity
+  atpQty            Int      // ATP quantity
+  fixedQty          Int      // Fixed quantity
+  risdQty           Int      // RISD quantity
+  palletShort       Float    // Pallet short
+  confLevel         Float    // Confidence level percentage
+  uom               String   // Unit of measure (e.g., "CS")
+
+  // Dates
+  shipDate          DateTime?
+  availDate         DateTime?
+
+  @@index([alertId])
+  @@index([materialCode])
+}
+
+model OrderPeggingDetail {
+  id                String   @id @default(cuid())
+  alertId           String
+  alert             OrderPerformanceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  lineNumber        Int      // Line number
+  materialCode      String   // Material code
+  description       String   // Product description
+
+  // Order information
+  orderQty          Int      // Order quantity
+  atpQty            Int      // ATP quantity
+  seqNumber         Int      // Sequence number
+  reqtOrderNumber   String   // Requirement order number
+
+  // Location and supply information
+  lineHash          String   // Line hash/identifier
+  alternativeMaterial String // Alternative material code
+  supplyType        String   // Supply type (e.g., "Q_INSP", "OH_INV", "STO_ORDCNF")
+  supplyNumber      String?  // Supply order number
+  supplyDate        DateTime? // Supply available date
+
+  @@index([alertId])
+  @@index([materialCode])
+}
+
+model AlternateProposal {
+  id                String   @id @default(cuid())
+  alertId           String
+  alert             OrderPerformanceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  // Proposal details
+  proposalName      String   // "Current", "Proposed", etc.
+  shipDate          DateTime // Proposed ship date
+  availDate         DateTime // Proposed availability date
+  atpStatus         String   // ATP status for this proposal
+  fillRate          Float    // Fill rate percentage
+  palletCut         Int?     // Pallet cut value
+
+  // Financial impact
+  penaltyCost       Float    // Penalty cost
+  revenueLoss       Float    // Revenue loss
+
+  // Supply elements (JSON array)
+  supplyElements    String   // JSON: [{ line, material, orderQty, allocatedQty, supplyNumber, supplyDate }]
+
+  // Recommendation
+  isRecommended     Boolean  @default(false)
+
+  createdAt         DateTime @default(now())
+
+  @@index([alertId])
+}
+
+model OrderLearningData {
+  id                String   @id @default(cuid())
+  alertId           String   @unique
+  alert             OrderPerformanceAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  // Confidence score contributors (JSON)
+  contributors      String   // JSON: [{ name: "Balance", value: 0.09, impact: "positive" }, ...]
+
+  // Overall confidence
+  valueAchievement  Float    // Value achievement probability (0-100)
+
+  // Decision history
+  decisionSummary   String?  // JSON: past decisions and outcomes
+
+  // Process flow data
+  processFlow       String?  // JSON: process flow visualization data
+
+  // Report data
+  reportData        String?  // JSON: detailed report information
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([alertId])
+}

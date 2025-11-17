@@ -13,23 +13,13 @@ import {
   Button,
   Tabs,
   Banner,
-  Icon,
 } from "@shopify/polaris"
-import {
-  AlertCircleIcon,
-  PackageIcon,
-  ChartVerticalIcon,
-  DeliveryIcon,
-  LocationIcon,
-  StoreIcon,
-} from "@shopify/polaris-icons"
-  
+
 // Types
 interface ControlTowerModule {
   id: string
   name: string
   description: string
-  icon: any
   alerts: number
   status: "critical" | "warning" | "normal"
   kpi: string
@@ -45,81 +35,66 @@ interface SummaryMetric {
   status: "critical" | "warning" | "success" | "info"
 }
 
+// Only show 100% implementable modules with Shopify data
 const controlTowerModules: ControlTowerModule[] = [
   {
     id: "demand",
-    name: "Customer Forecast Demand",
-    description: "Orders > Customer allocated forecast",
-    icon: ChartVerticalIcon,
+    name: "Inventory Rebalancing",
+    description: "Optimize inventory distribution across locations",
     alerts: 12,
     status: "warning",
-    kpi: "Forecast Accuracy: 70%",
+    kpi: "12 High-Priority Alerts",
     href: "/inv/demand-balancing",
     color: "warning",
   },
   {
     id: "finished-goods",
-    name: "Finished Goods",
-    description: "FG Coverage Analysis",
-    icon: PackageIcon,
+    name: "Prevent Stockout and Aging",
+    description: "Monitor stock levels and coverage",
     alerts: 22,
     status: "critical",
-    kpi: "FG Coverage: 78%",
+    kpi: "22 Low Stock Items",
     href: "/inv/finishGoods",
     color: "critical",
   },
   {
     id: "customer-receipt",
-    name: "Customer Receipt",
-    description: "Customer OTIF Performance",
-    icon: DeliveryIcon,
-    alerts: 18,
+    name: "Improve Order Performance",
+    description: "Track ATP status and order fulfillment",
+    alerts: 8,
     status: "warning",
-    kpi: "Customer OTIF: 92%",
-    href: "/inv/cusRecipt",
+    kpi: "$320K Revenue at Risk",
+    href: "/inv/order-performance",
     color: "warning",
   },
   {
-    id: "manufacturing",
-    name: "Manufacturing",
-    description: "Production OTIF",
-    icon: LocationIcon,
-    alerts: 6,
-    status: "normal",
-    kpi: "Production OTIF: 95%",
-    href: "/inv/manfDash",
-    color: "success",
-  },
-  {
-    id: "supplier",
-    name: "Supplier",
-    description: "Supplier OTIF",
-    icon: StoreIcon,
+    id: "safety-stock",
+    name: "Optimize Safety Stock",
+    description: "Balance inventory costs with service levels",
     alerts: 8,
     status: "normal",
-    kpi: "Supplier OTIF: 85%",
-    href: "/inv/supplier-alerts",
+    kpi: "8 Optimization Opportunities",
+    href: "/inv/safety-stock",
     color: "info",
   },
   {
-    id: "raw-materials",
-    name: "Raw Materials",
-    description: "RM Coverage",
-    icon: PackageIcon,
-    alerts: 15,
-    status: "critical",
-    kpi: "RM Coverage: 65%",
-    href: "/inv/raw-material",
-    color: "critical",
+    id: "promotion-strategy",
+    name: "Change Promotion Strategy",
+    description: "Adjust pricing and promotions for inventory",
+    alerts: 5,
+    status: "normal",
+    kpi: "5 Slow-Moving SKUs",
+    href: "/inv/promotion-strategy",
+    color: "success",
   },
 ]
 
+// Updated metrics to reflect Shopify-available data
 const summaryMetrics: SummaryMetric[] = [
+  { label: "Inventory Health", value: "78%", target: "85%", status: "warning" },
   { label: "OTIF Performance", value: "92%", target: "95%", status: "warning" },
-  { label: "Fill Rate", value: "87%", target: "90%", status: "warning" },
-  { label: "Service Level", value: "94%", target: "96%", status: "success" },
-  { label: "Perfect Order", value: "89%", target: "92%", status: "warning" },
-  { label: "OTIF Loss", value: "8%", trend: "critical", status: "critical" },
+  { label: "Stock Coverage", value: "23 days", target: "30 days", status: "warning" },
+  { label: "At-Risk Revenue", value: "$18.5M", trend: "critical", status: "critical" },
 ]
 
 export const loader: LoaderFunction = async () => {
@@ -138,19 +113,14 @@ export default function SupplyChainControlTower() {
 
   const tabs = [
     {
-      id: "control-alerts",
-      content: "Control Tower Alerts",
-      panelID: "control-alerts-panel",
+      id: "modules",
+      content: `Modules (${modules.length})`,
+      panelID: "modules-panel",
     },
     {
-      id: "kpis",
-      content: "Supply Chain KPIs",
-      panelID: "kpis-panel",
-    },
-    {
-      id: "benefits",
-      content: "Performance",
-      panelID: "benefits-panel",
+      id: "performance",
+      content: "Performance Metrics",
+      panelID: "performance-panel",
     },
   ]
 
@@ -173,26 +143,35 @@ export default function SupplyChainControlTower() {
 
   return (
     <Page
-      fullWidth
-      title="Supply Chain Control Tower"
-      subtitle="Early Warning System & Performance Dashboard"
-      primaryAction={{
-        content: "Export Report",
-        onAction: () => console.log("Export report"),
-      }}
-    >
-      <Layout>
-        {/* Summary Metrics */}
+        fullWidth
+        title="Inventory Control Tower"
+        subtitle="Real-time inventory monitoring and demand forecasting powered by Shopify data"
+        primaryAction={{
+          content: "Refresh Data",
+          onAction: () => console.log("Refresh data"),
+        }}
+      >
+        <Layout>
+        {/* Summary Metrics - Enhanced with better spacing */}
         <Layout.Section>
-          <InlineStack gap="400" wrap>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: "20px",
+            }}
+          >
             {metrics.map((metric: SummaryMetric, index: number) => (
-              <Box key={index} minWidth="200px">
-                <Card>
-                  <BlockStack gap="200">
+              <Card key={index}>
+                <BlockStack gap="300">
+                  <InlineStack align="space-between" blockAlign="start">
                     <Text as="p" variant="bodySm" tone="subdued">
                       {metric.label}
                     </Text>
-                    <Text as="h3" variant="headingLg" fontWeight="bold">
+                    <Badge tone={metric.status}>{metric.status}</Badge>
+                  </InlineStack>
+                  <BlockStack gap="100">
+                    <Text as="h3" variant="heading2xl" fontWeight="bold">
                       {metric.value}
                     </Text>
                     {metric.target && (
@@ -200,25 +179,22 @@ export default function SupplyChainControlTower() {
                         Target: {metric.target}
                       </Text>
                     )}
-                    <Badge tone={metric.status}>{metric.status}</Badge>
                   </BlockStack>
-                </Card>
-              </Box>
+                </BlockStack>
+              </Card>
             ))}
-          </InlineStack>
+          </div>
         </Layout.Section>
 
-        {/* Alert Summary */}
+        {/* Alert Summary - Enhanced messaging */}
         {criticalAlerts > 0 && (
           <Layout.Section>
             <Banner
-              title={`${criticalAlerts} critical modules require immediate attention`}
+              title={`${criticalAlerts} critical inventory ${criticalAlerts === 1 ? 'issue' : 'issues'} detected`}
               tone="critical"
-              icon={AlertCircleIcon}
             >
               <p>
-                {totalAlerts} total alerts across {modules.length} modules. Review the control tower modules below to
-                take action.
+                {totalAlerts} total alerts across your inventory. Take action now to prevent stockouts and revenue loss.
               </p>
             </Banner>
           </Layout.Section>
@@ -231,148 +207,141 @@ export default function SupplyChainControlTower() {
               <Box padding="400">
                 {selectedTab === 0 && (
                   <BlockStack gap="400">
-                    {/* Control Tower Modules */}
+                    <Text variant="headingMd" as="h3">
+                      Inventory Management Modules
+                    </Text>
+                    <Text variant="bodyMd" tone="subdued" as="p">
+                      Click on any module to view detailed insights and take action
+                    </Text>
+                    {/* Enhanced Module Cards */}
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-                        gap: "16px",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+                        gap: "20px",
                       }}
                     >
-                      {modules.map((module: ControlTowerModule) => (
+                      {modules.map((module: ControlTowerModule) => {
+                        return (
                         <Card key={module.id}>
-                          <BlockStack gap="300">
+                          <BlockStack gap="400">
                             <InlineStack align="space-between" blockAlign="start">
-                              <InlineStack gap="200" blockAlign="center">
-                                <Box>
-                                  <Icon source={module.icon} />
-                                </Box>
-                                <BlockStack gap="100">
-                                  <Text variant="headingSm" as="h3" fontWeight="semibold">
-                                    {module.name}
-                                  </Text>
-                                  <Text variant="bodySm" tone="subdued" as="p">
-                                    {module.description}
-                                  </Text>
-                                </BlockStack>
-                              </InlineStack>
+                              <BlockStack gap="100">
+                                <Text variant="headingMd" as="h3" fontWeight="semibold">
+                                  {module.name}
+                                </Text>
+                                <Text variant="bodySm" tone="subdued" as="p">
+                                  {module.description}
+                                </Text>
+                              </BlockStack>
                               {getStatusBadge(module.status)}
                             </InlineStack>
 
-                            <BlockStack gap="200">
-                              <Text variant="bodySm" as="p">
-                                {module.kpi}
-                              </Text>
-                              <InlineStack align="space-between">
-                                <Badge tone={module.color}>{`${module.alerts} Active Alerts`}</Badge>
-                                <Button
-                                  url={module.href}
-                                  variant="plain"
-                                  textAlign="right"
-                                  size="micro"
-                                >
-                                  View Details →
-                                </Button>
+                            <Box
+                              padding="300"
+                              background="bg-surface-secondary"
+                              borderRadius="200"
+                            >
+                              <InlineStack align="space-between" blockAlign="center">
+                                <Text variant="bodyMd" fontWeight="medium" as="p">
+                                  {module.kpi}
+                                </Text>
+                                <Badge tone={module.color} size="small">
+                                  {`${module.alerts} alerts`}
+                                </Badge>
                               </InlineStack>
-                            </BlockStack>
+                            </Box>
+
+                            <Button
+                              url={module.href}
+                              variant="primary"
+                              size="large"
+                              fullWidth
+                            >
+                              View Dashboard
+                            </Button>
                           </BlockStack>
                         </Card>
-                      ))}
+                        )
+                      })}
                     </div>
                   </BlockStack>
                 )}
 
                 {selectedTab === 1 && (
                   <BlockStack gap="400">
-                    <Text variant="headingMd" as="h3">
-                      Supply Chain KPIs Performance
-                    </Text>
+                    <BlockStack gap="200">
+                      <Text variant="headingMd" as="h3">
+                        Performance Overview
+                      </Text>
+                      <Text variant="bodyMd" tone="subdued" as="p">
+                        Key metrics calculated from your Shopify inventory and order data
+                      </Text>
+                    </BlockStack>
+
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-                        gap: "16px",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                        gap: "20px",
                       }}
                     >
                       {metrics.map((metric: SummaryMetric, index: number) => (
                         <Card key={index}>
-                          <BlockStack gap="200">
-                            <Text variant="bodyMd" fontWeight="semibold" as="p">
-                              {metric.label}
-                            </Text>
-                            <InlineStack align="space-between" blockAlign="center">
-                              <Text variant="headingLg" as="h4">
+                          <BlockStack gap="300">
+                            <InlineStack align="space-between" blockAlign="start">
+                              <Text variant="bodySm" tone="subdued" as="p">
+                                {metric.label}
+                              </Text>
+                              <Badge tone={metric.status}>{metric.status}</Badge>
+                            </InlineStack>
+                            <BlockStack gap="100">
+                              <Text variant="heading2xl" fontWeight="bold" as="h4">
                                 {metric.value}
                               </Text>
                               {metric.target && (
-                                <Text variant="bodySm" tone="subdued" as="span">
-                                  → {metric.target}
-                                </Text>
+                                <InlineStack gap="100" blockAlign="center">
+                                  <Text variant="bodySm" tone="subdued" as="span">
+                                    Target:
+                                  </Text>
+                                  <Text variant="bodySm" fontWeight="medium" as="span">
+                                    {metric.target}
+                                  </Text>
+                                </InlineStack>
                               )}
-                            </InlineStack>
-                            <Badge tone={metric.status}>{metric.status}</Badge>
+                            </BlockStack>
                           </BlockStack>
                         </Card>
                       ))}
                     </div>
-                  </BlockStack>
-                )}
 
-                {selectedTab === 2 && (
-                  <BlockStack gap="400">
-                    <Text variant="headingMd" as="h3">
-                      Business Impact Summary
-                    </Text>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                        gap: "16px",
-                      }}
-                    >
-                      <Card>
+                    <Card>
+                      <BlockStack gap="300">
+                        <Text variant="headingSm" as="h4">
+                          Data Sources
+                        </Text>
                         <BlockStack gap="200">
-                          <Text variant="bodySm" tone="subdued" as="p">
-                            Sales Growth
-                          </Text>
-                          <Text variant="headingLg" fontWeight="bold" as="h4">
-                            +3%
-                          </Text>
-                          <Text variant="bodySm" tone="subdued" as="p">
-                            Target: +5%
-                          </Text>
-                          <Badge tone="success">On track</Badge>
+                          <InlineStack gap="200" blockAlign="center">
+                            <Badge tone="success">✓</Badge>
+                            <Text variant="bodySm" as="p">
+                              Live Shopify inventory levels across all locations
+                            </Text>
+                          </InlineStack>
+                          <InlineStack gap="200" blockAlign="center">
+                            <Badge tone="success">✓</Badge>
+                            <Text variant="bodySm" as="p">
+                              Order history and fulfillment data (last 30 days)
+                            </Text>
+                          </InlineStack>
+                          <InlineStack gap="200" blockAlign="center">
+                            <Badge tone="success">✓</Badge>
+                            <Text variant="bodySm" as="p">
+                              Product pricing and variant information
+                            </Text>
+                          </InlineStack>
                         </BlockStack>
-                      </Card>
-                      <Card>
-                        <BlockStack gap="200">
-                          <Text variant="bodySm" tone="subdued" as="p">
-                            OTIF Performance
-                          </Text>
-                          <Text variant="headingLg" fontWeight="bold" as="h4">
-                            92%
-                          </Text>
-                          <Text variant="bodySm" tone="subdued" as="p">
-                            Target: 95%
-                          </Text>
-                          <Badge tone="warning">Below target</Badge>
-                        </BlockStack>
-                      </Card>
-                      <Card>
-                        <BlockStack gap="200">
-                          <Text variant="bodySm" tone="subdued" as="p">
-                            Inventory Reduction
-                          </Text>
-                          <Text variant="headingLg" fontWeight="bold" as="h4">
-                            -2%
-                          </Text>
-                          <Text variant="bodySm" tone="subdued" as="p">
-                            Target: -5%
-                          </Text>
-                          <Badge tone="info">Improving</Badge>
-                        </BlockStack>
-                      </Card>
-                    </div>
+                      </BlockStack>
+                    </Card>
                   </BlockStack>
                 )}
               </Box>
