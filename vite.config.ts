@@ -3,6 +3,7 @@ import { installGlobals } from "@remix-run/node";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
+import { vercelPreset } from "@vercel/remix/vite";
 import path from "node:path";
 
 installGlobals({ nativeFetch: true });
@@ -56,6 +57,7 @@ export default defineConfig({
     tailwindcss(),
     remix({
       ignoredRouteFiles: ["**/.*"],
+      presets: [vercelPreset()],
       future: {
         v3_fetcherPersist: true,
         v3_relativeSplatPath: true,
