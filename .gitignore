@@ -23,7 +23,8 @@ database.sqlite
 credentials.json
 service-account*.json
 
-package-lock.json
+# Keep package-lock.json for reproducible builds (required for Docker)
+# package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
